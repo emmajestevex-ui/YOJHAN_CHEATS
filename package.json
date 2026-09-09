@@ -1,0 +1,27 @@
+{
+  "name": "yojhan-cheats-discord-bot",
+  "version": "1.0.0",
+  "description": "Bot de Discord YOJHAN_CHEATS con panel de embeds, tickets y moderacion.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "check": "node scripts/check-syntax.js"
+  },
+  "keywords": [
+    "discord",
+    "discordjs",
+    "bot",
+    "yojhan-cheats"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}
