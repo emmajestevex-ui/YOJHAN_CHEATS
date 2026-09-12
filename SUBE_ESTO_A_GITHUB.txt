@@ -1,0 +1,28 @@
+PARA SUBIR EL BOT A GITHUB SIN ERROR
+
+1. Abre esta carpeta:
+   C:\Users\Enmanuel\Documents\Codex\2026-09-08\referenced-chatgpt-conversation-this-is-an\outputs\YOJHAN_CHEATS_GITHUB_UPLOAD_20260911
+
+2. Selecciona TODO lo que esta dentro de esa carpeta.
+
+3. Arrastralo a la pagina de GitHub donde dice "Drag files here".
+
+4. NO subas estas carpetas:
+   - node_modules
+   - outputs
+   - work
+
+5. NO subas el archivo .env.
+   El token del bot debe quedarse privado.
+
+6. Despues de subirlo al hosting, instala dependencias con:
+   npm install
+
+7. Luego registra comandos con:
+   npm run deploy
+
+8. Y prende el bot con:
+   npm start
+
+Si GitHub sigue diciendo que son muchos archivos, estas subiendo la carpeta equivocada.
+La carpeta correcta tiene menos de 100 archivos.

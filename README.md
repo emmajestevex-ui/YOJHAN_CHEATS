@@ -9,6 +9,8 @@ Bot de Discord en Node.js con `discord.js` v14 para paneles administrativos tipo
 - Vista previa privada antes de publicar.
 - Opciones extra para banner/imagen, miniatura/logo, @everyone y boton de ticket.
 - Tickets normales y tickets especiales para keys gratis.
+- Todos los tickets se abren en la categoria `TIKET` por defecto.
+- Paneles de tickets con foto/banner y logo opcional.
 - Cierre de tickets con boton o comando.
 - Anuncios en embed.
 - Moderacion: mute/timeout, unmute, ban y clear.
@@ -57,7 +59,7 @@ GUILD_ID=id_de_tu_servidor
 ADMIN_ROLE_IDS=id_rol_admin
 MOD_ROLE_IDS=id_rol_mod
 TICKET_CATEGORY_ID=id_categoria_tickets
-FREE_KEYS_CATEGORY_ID=id_categoria_keys
+TICKET_CATEGORY_NAME=TIKET
 ```
 
 Nunca pegues el token en canales, embeds, capturas o repositorios publicos.
@@ -80,8 +82,8 @@ npm start
 
 - `/panel-admin`: abre un panel privado con botones para crear embeds.
 - `/publicar-embed canal`: abre directamente el formulario para publicar un embed en el canal elegido.
-- `/ticket-panel tipo canal`: publica un panel de tickets normal o de keys gratis.
-- `/anuncio canal titulo mensaje everyone color imagen`: publica un anuncio embed.
+- `/ticket-panel tipo canal titulo descripcion foto imagen_url logo logo_url boton`: publica un panel de tickets normal o de keys gratis.
+- `/anuncio canal titulo mensaje everyone color imagen foto logo_url logo`: publica un anuncio embed.
 - `/mute usuario duracion razon`: aplica timeout. Ejemplos: `10m`, `1h`, `2d`.
 - `/unmute usuario razon`: quita timeout.
 - `/ban usuario razon borrar_dias`: banea a un usuario.
@@ -108,14 +110,33 @@ El boton de ticket del embed puede abrir ticket normal o ticket especial de keys
 
 ## Tickets
 
-Los tickets se crean como canales privados con:
+Los tickets se crean como canales privados dentro de la categoria `TIKET`.
+
+El bot busca asi:
+
+1. Usa `TICKET_CATEGORY_ID` si es una categoria valida.
+2. Si ese ID falta o era un canal normal por error, busca una categoria llamada `TIKET`, `TICKET` o `TICKETS`.
+3. Si no existe, intenta crear la categoria `TIKET`.
+
+Cada ticket queda con:
 
 - acceso para el usuario que abre el ticket;
 - acceso para roles en `ADMIN_ROLE_IDS` y `MOD_ROLE_IDS`;
 - acceso para el bot;
 - bloqueo para `@everyone`.
 
-Para separar los tickets de keys gratis, usa `FREE_KEYS_CATEGORY_ID`. Si no lo configuras, esos tickets se crean en `TICKET_CATEGORY_ID`.
+Los tickets normales y los de keys gratis van a esa misma seccion para mantenerlos juntos.
+
+## Fotos En Paneles
+
+`/ticket-panel` y `/anuncio` aceptan imagen subida desde Discord o URL:
+
+- `foto`: banner/imagen grande.
+- `imagen_url` o `imagen`: URL para banner si no subes archivo.
+- `logo`: miniatura/logo.
+- `logo_url`: URL para miniatura/logo.
+
+En el panel administrativo por modal, Discord no permite subir archivos dentro del formulario; por eso ahi se colocan URLs en el boton `Media`.
 
 ## Keep-alive y 24/7
 

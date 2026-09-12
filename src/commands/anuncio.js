@@ -2,8 +2,9 @@ const { ChannelType, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } = 
 
 const { config } = require("../config");
 const { parseColor } = require("../utils/colors");
+const { readImageOption } = require("../utils/images");
 const { requireStaff } = require("../utils/permissions");
-const { cleanInput, isHttpUrl, truncate } = require("../utils/text");
+const { truncate } = require("../utils/text");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -49,6 +50,24 @@ module.exports = {
         .setName("imagen")
         .setDescription("URL opcional de imagen/banner.")
         .setRequired(false)
+    )
+    .addAttachmentOption((option) =>
+      option
+        .setName("foto")
+        .setDescription("Imagen/banner subida desde Discord.")
+        .setRequired(false)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("logo_url")
+        .setDescription("URL opcional de miniatura/logo.")
+        .setRequired(false)
+    )
+    .addAttachmentOption((option) =>
+      option
+        .setName("logo")
+        .setDescription("Miniatura/logo subida desde Discord.")
+        .setRequired(false)
     ),
 
   async execute(interaction) {
@@ -58,10 +77,11 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     const channel = interaction.options.getChannel("canal", true);
-    const image = cleanInput(interaction.options.getString("imagen"));
+    const image = readImageOption(interaction, "foto", "imagen");
+    const thumbnail = readImageOption(interaction, "logo", "logo_url");
 
-    if (image && !isHttpUrl(image)) {
-      await interaction.editReply("La imagen debe ser una URL http o https valida.");
+    if (image.error || thumbnail.error) {
+      await interaction.editReply(image.error || thumbnail.error);
       return;
     }
 
@@ -72,7 +92,8 @@ module.exports = {
       .setFooter({ text: "YOJHAN_CHEATS" })
       .setTimestamp();
 
-    if (image) embed.setImage(image);
+    if (image.url) embed.setImage(image.url);
+    if (thumbnail.url) embed.setThumbnail(thumbnail.url);
 
     const everyone = interaction.options.getBoolean("everyone") || false;
     await channel.send({

@@ -10,8 +10,9 @@ const {
 
 const { config } = require("../config");
 const { CUSTOM_IDS, TICKET_TYPES } = require("../constants");
+const { parseColor } = require("../utils/colors");
 const { isStaff } = require("../utils/permissions");
-const { sanitizeChannelName, truncate } = require("../utils/text");
+const { cleanInput, isHttpUrl, sanitizeChannelName, truncate } = require("../utils/text");
 
 function normalizeTicketType(type) {
   return type === TICKET_TYPES.FREE_KEY ? TICKET_TYPES.FREE_KEY : TICKET_TYPES.NORMAL;
@@ -19,6 +20,14 @@ function normalizeTicketType(type) {
 
 function ticketLabel(type) {
   return normalizeTicketType(type) === TICKET_TYPES.FREE_KEY ? "keys gratis" : "soporte";
+}
+
+function normalizeName(value) {
+  return cleanInput(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function parseTicketTopic(topic) {
@@ -39,27 +48,36 @@ function closeButtonRow() {
   );
 }
 
-function panelPayload(type) {
+function panelPayload(type, options = {}) {
   const normalizedType = normalizeTicketType(type);
   const isFreeKey = normalizedType === TICKET_TYPES.FREE_KEY;
+  const title = cleanInput(options.title) || (isFreeKey ? "YOJHAN_CHEATS | Keys gratis" : "YOJHAN_CHEATS | Tickets");
+  const description = cleanInput(options.description) || (
+    isFreeKey
+      ? "Abre un ticket especial para solicitar una key gratis. El staff revisara tu caso."
+      : "Abre un ticket privado para soporte, compras o consultas."
+  );
+  const footer = cleanInput(options.footer) || "YOJHAN_CHEATS";
+  const buttonLabel = cleanInput(options.buttonLabel) || (isFreeKey ? "Pedir key gratis" : "Abrir ticket");
+  const imageUrl = cleanInput(options.imageUrl);
+  const thumbnailUrl = cleanInput(options.thumbnailUrl);
 
   const embed = new EmbedBuilder()
-    .setColor(config.defaultEmbedColor)
-    .setTitle(isFreeKey ? "YOJHAN_CHEATS | Keys gratis" : "YOJHAN_CHEATS | Tickets")
-    .setDescription(
-      isFreeKey
-        ? "Abre un ticket especial para solicitar una key gratis. El staff revisara tu caso."
-        : "Abre un ticket privado para soporte, compras o consultas."
-    )
+    .setColor(parseColor(options.color, config.defaultEmbedColor))
+    .setTitle(truncate(title, 256))
+    .setDescription(truncate(description, 4096))
     .addFields(
       { name: "Tipo", value: isFreeKey ? "Ticket especial de key gratis" : "Ticket normal", inline: true },
       { name: "Staff", value: "Solo admins/mods podran verlo.", inline: true }
     )
-    .setFooter({ text: "YOJHAN_CHEATS" });
+    .setFooter({ text: truncate(footer, 2048) });
+
+  if (imageUrl && isHttpUrl(imageUrl)) embed.setImage(imageUrl);
+  if (thumbnailUrl && isHttpUrl(thumbnailUrl)) embed.setThumbnail(thumbnailUrl);
 
   const button = new ButtonBuilder()
     .setCustomId(`${CUSTOM_IDS.OPEN_TICKET_PREFIX}${normalizedType}`)
-    .setLabel(isFreeKey ? "Pedir key gratis" : "Abrir ticket")
+    .setLabel(truncate(buttonLabel, 80))
     .setStyle(ButtonStyle.Danger);
 
   return {
@@ -68,7 +86,7 @@ function panelPayload(type) {
   };
 }
 
-async function sendTicketPanel(interaction, channel, type) {
+async function sendTicketPanel(interaction, channel, type, options = {}) {
   await interaction.deferReply({ ephemeral: true });
 
   if (!channel || !channel.isTextBased() || typeof channel.send !== "function") {
@@ -86,12 +104,13 @@ async function sendTicketPanel(interaction, channel, type) {
     return;
   }
 
-  await channel.send(panelPayload(type));
+  await channel.send(panelPayload(type, options));
   await interaction.editReply(`Panel de ${ticketLabel(type)} publicado en ${channel}.`);
 }
 
 function buildTicketOverwrites(guild, userId, botUserId) {
-  const staffRoleIds = [...new Set([...config.adminRoleIds, ...config.modRoleIds])];
+  const staffRoleIds = [...new Set([...config.adminRoleIds, ...config.modRoleIds])]
+    .filter((roleId) => guild.roles.cache.has(roleId));
 
   const overwrites = [
     {
@@ -138,6 +157,70 @@ function buildTicketOverwrites(guild, userId, botUserId) {
   return overwrites;
 }
 
+async function fetchConfiguredCategory(guild, categoryId) {
+  if (!categoryId) return null;
+  const channel = await guild.channels.fetch(categoryId).catch(() => null);
+  if (!channel) {
+    console.warn(`[tickets] No encontre la categoria configurada: ${categoryId}`);
+    return null;
+  }
+
+  if (channel.type !== ChannelType.GuildCategory) {
+    console.warn(`[tickets] TICKET_CATEGORY_ID debe ser una categoria, no un canal: ${channel.name}`);
+    return null;
+  }
+
+  return channel;
+}
+
+async function findTicketCategory(guild) {
+  const configured = await fetchConfiguredCategory(guild, config.ticketCategoryId);
+  if (configured) return configured;
+
+  const wantedNames = [
+    normalizeName(config.ticketCategoryName),
+    "tiket",
+    "ticket",
+    "tickets"
+  ].filter(Boolean);
+
+  const categories = guild.channels.cache
+    .filter((channel) => channel.type === ChannelType.GuildCategory)
+    .filter((channel) => {
+      const name = normalizeName(channel.name);
+      return wantedNames.some((wanted) => name.includes(wanted));
+    })
+    .sort((left, right) => (right.rawPosition ?? 0) - (left.rawPosition ?? 0));
+
+  const existing = categories.first();
+  if (existing) return existing;
+
+  const created = await guild.channels.create({
+    name: config.ticketCategoryName || "TIKET",
+    type: ChannelType.GuildCategory,
+    reason: "Categoria de tickets creada por YOJHAN_CHEATS"
+  });
+
+  const lastPosition = guild.channels.cache
+    .filter((channel) => channel.type === ChannelType.GuildCategory)
+    .reduce((max, channel) => Math.max(max, channel.rawPosition ?? 0), 0);
+
+  await created.setPosition(lastPosition).catch(() => {});
+  return created;
+}
+
+function ticketCreateErrorMessage(error) {
+  if (error?.code === 50013) {
+    return "No puedo crear el ticket porque me falta permiso de Administrar canales o no tengo acceso a la categoria TIKET.";
+  }
+
+  if (error?.code === 50035) {
+    return "No pude crear el ticket porque hay una categoria o rol mal configurado. Revisa que TICKET_CATEGORY_ID sea el ID de una categoria, no de un canal.";
+  }
+
+  return "No pude crear el ticket. Revisa permisos del bot, categoria TIKET y jerarquia de roles.";
+}
+
 function findExistingTicket(guild, userId, type) {
   return guild.channels.cache.find((channel) => {
     if (channel.type !== ChannelType.GuildText) return false;
@@ -177,22 +260,32 @@ async function openTicket(interaction, type) {
   }
 
   const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    await interaction.editReply("No puedo crear tickets porque me falta el permiso Administrar canales.");
+    return;
+  }
+
   const prefix = normalizedType === TICKET_TYPES.FREE_KEY
     ? config.freeKeyTicketNamePrefix
     : config.ticketNamePrefix;
   const channelName = `${sanitizeChannelName(prefix)}-${sanitizeChannelName(interaction.user.username)}-${interaction.user.id.slice(-4)}`.slice(0, 100);
-  const parent = normalizedType === TICKET_TYPES.FREE_KEY
-    ? (config.freeKeysCategoryId || config.ticketCategoryId)
-    : config.ticketCategoryId;
+  let channel;
 
-  const channel = await interaction.guild.channels.create({
-    name: channelName,
-    type: ChannelType.GuildText,
-    parent: parent || undefined,
-    topic: `YOJHAN_TICKET owner=${interaction.user.id} type=${normalizedType}`,
-    permissionOverwrites: buildTicketOverwrites(interaction.guild, interaction.user.id, botMember.id),
-    reason: `Ticket ${ticketLabel(normalizedType)} creado por ${interaction.user.tag}`
-  });
+  try {
+    const category = await findTicketCategory(interaction.guild);
+    channel = await interaction.guild.channels.create({
+      name: channelName,
+      type: ChannelType.GuildText,
+      parent: category?.id,
+      topic: `YOJHAN_TICKET owner=${interaction.user.id} type=${normalizedType}`,
+      permissionOverwrites: buildTicketOverwrites(interaction.guild, interaction.user.id, botMember.id),
+      reason: `Ticket ${ticketLabel(normalizedType)} creado por ${interaction.user.tag}`
+    });
+  } catch (error) {
+    console.error("[tickets] Error creando ticket:", error);
+    await interaction.editReply(ticketCreateErrorMessage(error));
+    return;
+  }
 
   await channel.send({
     content: `${interaction.user}`,
