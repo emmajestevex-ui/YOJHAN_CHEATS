@@ -1,6 +1,6 @@
 {
   "name": "yojhan-cheats-discord-bot",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
   "description": "Bot de Discord YOJHAN_CHEATS: tickets, keys free, embeds, anuncios y moderacion.",
   "main": "index.js",

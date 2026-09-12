@@ -65,6 +65,43 @@ function imageFromOptions(interaction, attachmentName, urlName) {
   return isHttpUrl(interaction.options.getString(urlName));
 }
 
+// Los archivos subidos en un slash command pueden ser temporales. Como /publicar-embed
+// abre un modal antes de publicar, descargamos la imagen ANTES de abrir el modal y
+// guardamos sus bytes unos minutos. Al enviar el embed la adjuntamos de nuevo al mensaje.
+async function captureImageOption(interaction, attachmentName, urlName, prefix) {
+  const attachment = interaction.options.getAttachment(attachmentName);
+  if (attachment?.url) {
+    if (attachment.contentType && !attachment.contentType.startsWith('image/')) {
+      throw new Error(`El archivo de ${attachmentName} debe ser una imagen.`);
+    }
+
+    const maxBytes = 25 * 1024 * 1024;
+    if (attachment.size && attachment.size > maxBytes) {
+      throw new Error(`La imagen de ${attachmentName} es demasiado grande. Máximo 25 MB.`);
+    }
+
+    const response = await fetch(attachment.url);
+    if (!response.ok) {
+      throw new Error(`No pude descargar la imagen de ${attachmentName} antes de abrir el formulario.`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > maxBytes) {
+      throw new Error(`La imagen de ${attachmentName} es demasiado grande. Máximo 25 MB.`);
+    }
+
+    const originalName = String(attachment.name || 'imagen.png');
+    const extMatch = originalName.match(/\.[a-zA-Z0-9]{1,8}$/);
+    const extension = extMatch ? extMatch[0].toLowerCase() : '.png';
+    const fileName = `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}${extension}`;
+
+    return { type: 'attachment', fileName, buffer };
+  }
+
+  const url = isHttpUrl(interaction.options.getString(urlName));
+  return url ? { type: 'url', url } : null;
+}
+
 function parseColor(value, fallback = 0xed1c24) {
   if (!value) return fallback;
   const normalized = String(value).trim().replace(/^#/, '');
@@ -251,12 +288,17 @@ async function handlePublicarEmbed(interaction) {
     return;
   }
 
+  // Captura los archivos ahora mismo. Si esperamos a que el usuario complete el modal,
+  // el enlace temporal del archivo de Discord puede dejar de ser válido.
+  const image = await captureImageOption(interaction, 'foto', 'imagen_url', 'foto');
+  const logo = await captureImageOption(interaction, 'logo', 'logo_url', 'logo');
+
   const nonce = crypto.randomBytes(9).toString('hex');
   pendingEmbeds.set(nonce, {
     userId: interaction.user.id,
     channelId: channel.id,
-    imageUrl: imageFromOptions(interaction, 'foto', 'imagen_url'),
-    logoUrl: imageFromOptions(interaction, 'logo', 'logo_url'),
+    image,
+    logo,
     expiresAt: Date.now() + PENDING_TTL_MS,
   });
 
@@ -361,9 +403,23 @@ async function handlePublicarEmbedModal(interaction) {
   }
 
   if (footer) embed.setFooter({ text: footer.slice(0, 2048) });
-  applyImages(embed, pending.imageUrl, pending.logoUrl);
 
-  await channel.send({ embeds: [embed] });
+  const files = [];
+  if (pending.image?.type === 'url') {
+    embed.setImage(pending.image.url);
+  } else if (pending.image?.type === 'attachment') {
+    embed.setImage(`attachment://${pending.image.fileName}`);
+    files.push({ attachment: pending.image.buffer, name: pending.image.fileName });
+  }
+
+  if (pending.logo?.type === 'url') {
+    embed.setThumbnail(pending.logo.url);
+  } else if (pending.logo?.type === 'attachment') {
+    embed.setThumbnail(`attachment://${pending.logo.fileName}`);
+    files.push({ attachment: pending.logo.buffer, name: pending.logo.fileName });
+  }
+
+  await channel.send({ embeds: [embed], files });
   await interaction.reply({ content: `✅ Publicación enviada a ${channel}.`, ephemeral: true });
 }
 

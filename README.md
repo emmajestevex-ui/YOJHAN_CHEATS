@@ -86,3 +86,7 @@ TICKET_CATEGORY_NAME=TIKET
 ```
 
 No hace falta cambiar el token del bot.
+
+## Corrección 2.1.1
+
+`/publicar-embed` ahora conserva correctamente las imágenes subidas antes de abrir el formulario y las vuelve a adjuntar al mensaje final. Esto evita que la foto desaparezca al publicar el embed.
