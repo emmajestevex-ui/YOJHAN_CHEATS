@@ -3,9 +3,9 @@ const { REST, Routes } = require("discord.js");
 const { assertRuntimeConfig, config } = require("./config");
 const { getCommandData } = require("./utils/loadCommands");
 
-assertRuntimeConfig();
+async function deployCommands() {
+  assertRuntimeConfig();
 
-async function main() {
   const commands = getCommandData();
   const rest = new REST({ version: "10" }).setToken(config.token);
 
@@ -18,7 +18,13 @@ async function main() {
   console.log("[deploy] Comandos registrados correctamente.");
 }
 
-main().catch((error) => {
-  console.error("[deploy] Error registrando comandos:", error);
-  process.exit(1);
-});
+if (require.main === module) {
+  deployCommands().catch((error) => {
+    console.error("[deploy] Error registrando comandos:", error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  deployCommands
+};

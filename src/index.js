@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Partials } = require("discord.js");
 
 const { assertRuntimeConfig, config } = require("./config");
+const { deployCommands } = require("./deploy-commands");
 const { startKeepAlive } = require("./keepAlive");
 const { loadCommands } = require("./utils/loadCommands");
 
@@ -25,6 +26,13 @@ for (const event of ["ready", "interactionCreate"]) {
   }
 }
 
-startKeepAlive(config);
+async function start() {
+  await deployCommands();
+  startKeepAlive(config);
+  await client.login(config.token);
+}
 
-client.login(config.token);
+start().catch((error) => {
+  console.error("[start] Error iniciando YOJHAN_CHEATS:", error);
+  process.exit(1);
+});
