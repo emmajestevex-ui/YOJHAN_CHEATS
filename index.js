@@ -419,8 +419,21 @@ async function handlePublicarEmbedModal(interaction) {
     files.push({ attachment: pending.logo.buffer, name: pending.logo.fileName });
   }
 
-  await channel.send({ embeds: [embed], files });
-  await interaction.reply({ content: `✅ Publicación enviada a ${channel}.`, ephemeral: true });
+  // Publica TODO junto: embed + imagen dentro del embed + botón de ticket debajo.
+  const ticketRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('ticket_open:normal')
+      .setLabel('Abrir ticket')
+      .setEmoji('🎫')
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  await channel.send({
+    embeds: [embed],
+    files,
+    components: [ticketRow],
+  });
+  await interaction.reply({ content: `✅ Publicación enviada a ${channel} con imagen y botón de ticket.`, ephemeral: true });
 }
 
 async function handleAnnouncement(interaction) {
