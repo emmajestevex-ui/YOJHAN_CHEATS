@@ -65,6 +65,24 @@ function imageFromOptions(interaction, attachmentName, urlName) {
   return isHttpUrl(interaction.options.getString(urlName));
 }
 
+function normalizeChannelId(value) {
+  return String(value || '').trim().replace(/[<#>]/g, '');
+}
+
+async function resolveTargetChannel(interaction) {
+  const channelId = normalizeChannelId(interaction.options.getString('canal_id'));
+  const selectedChannel = interaction.options.getChannel('canal');
+  const channel = channelId
+    ? await interaction.guild.channels.fetch(channelId).catch(() => null)
+    : selectedChannel || interaction.channel;
+
+  if (!channel || !channel.isTextBased() || typeof channel.send !== 'function') {
+    return null;
+  }
+
+  return channel;
+}
+
 // Los archivos subidos en un slash command pueden ser temporales. Como /publicar-embed
 // abre un modal antes de publicar, descargamos la imagen ANTES de abrir el modal y
 // guardamos sus bytes unos minutos. Al enviar el embed la adjuntamos de nuevo al mensaje.
@@ -124,32 +142,93 @@ async function validSupportRoleIds(guild) {
   return ids.filter((id) => guild.roles.cache.has(id));
 }
 
-async function resolveTicketCategory(guild) {
+function normalizeCategoryName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+async function fetchCategoryById(guild, categoryId) {
+  if (!categoryId) return null;
+  const configured = await guild.channels.fetch(categoryId).catch(() => null);
+  return configured?.type === ChannelType.GuildCategory ? configured : null;
+}
+
+async function resolveTicketCategory(guild, kind) {
   await guild.channels.fetch().catch(() => null);
 
-  const configuredId = String(process.env.TICKET_CATEGORY_ID || '').trim();
-  if (configuredId) {
-    const configured = guild.channels.cache.get(configuredId);
-    if (configured?.type === ChannelType.GuildCategory) return configured;
-  }
+  const isKey = kind === 'key';
+  const configuredId = String(
+    isKey ? process.env.FREE_KEYS_CATEGORY_ID || '' : process.env.TICKET_CATEGORY_ID || '',
+  ).trim();
+  const configured = await fetchCategoryById(guild, configuredId);
+  if (configured) return configured;
 
-  const preferred = String(process.env.TICKET_CATEGORY_NAME || 'TIKET').trim().toUpperCase();
-  const acceptedNames = new Set([preferred, 'TIKET', 'TICKET', 'TICKETS']);
+  const categoryName = String(
+    isKey
+      ? process.env.FREE_KEYS_CATEGORY_NAME || 'TIKET GRATIS'
+      : process.env.TICKET_CATEGORY_NAME || 'TIKET',
+  ).trim();
+  const acceptedNames = new Set(
+    isKey
+      ? [categoryName, 'TIKET GRATIS', 'TICKET GRATIS', 'KEY GRATIS', 'KEYS GRATIS'].map(normalizeCategoryName)
+      : [categoryName, 'TIKET', 'TICKET', 'TICKETS'].map(normalizeCategoryName),
+  );
   const existing = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildCategory && acceptedNames.has(c.name.toUpperCase()),
+    (c) => c.type === ChannelType.GuildCategory && acceptedNames.has(normalizeCategoryName(c.name)),
   );
   if (existing) return existing;
 
   const me = guild.members.me || (await guild.members.fetchMe());
   if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) {
-    throw new Error('No existe la categoría TIKET y al bot le falta el permiso Administrar canales.');
+    throw new Error(`No existe la categoría ${categoryName} y al bot le falta el permiso Administrar canales.`);
   }
 
-  return guild.channels.create({
-    name: 'TIKET',
+  const created = await guild.channels.create({
+    name: categoryName,
     type: ChannelType.GuildCategory,
     reason: 'Categoría automática para tickets de YOJHAN_CHEATS',
   });
+
+  const normalCategory = isKey ? await resolveTicketCategory(guild, 'normal').catch(() => null) : null;
+  const position = normalCategory
+    ? (normalCategory.rawPosition ?? 0) + 1
+    : guild.channels.cache
+      .filter((channel) => channel.type === ChannelType.GuildCategory)
+      .reduce((max, channel) => Math.max(max, channel.rawPosition ?? 0), 0);
+  await created.setPosition(position).catch(() => {});
+
+  return created;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function ticketChannelPrefix(kind) {
+  const rawPrefix = kind === 'key'
+    ? process.env.FREE_KEY_TICKET_NAME_PREFIX || 'tiket-gratis'
+    : process.env.TICKET_NAME_PREFIX || 'tiket';
+
+  return cleanName(rawPrefix);
+}
+
+function nextTicketChannelName(guild, categoryId, kind) {
+  const prefix = ticketChannelPrefix(kind);
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)$`, 'i');
+  let maxNumber = 0;
+
+  for (const channel of guild.channels.cache.values()) {
+    if (channel.type !== ChannelType.GuildText) continue;
+    if (categoryId && channel.parentId !== categoryId) continue;
+
+    const match = channel.name.match(pattern);
+    if (match) maxNumber = Math.max(maxNumber, Number.parseInt(match[1], 10) || 0);
+  }
+
+  return `${prefix}-${maxNumber + 1}`;
 }
 
 async function openTicket(interaction, kind) {
@@ -157,7 +236,7 @@ async function openTicket(interaction, kind) {
 
   await interaction.deferReply({ ephemeral: true });
 
-  const category = await resolveTicketCategory(interaction.guild);
+  const category = await resolveTicketCategory(interaction.guild, kind);
   const supportRoles = await validSupportRoleIds(interaction.guild);
   const me = interaction.guild.members.me || (await interaction.guild.members.fetchMe());
 
@@ -172,9 +251,9 @@ async function openTicket(interaction, kind) {
     return;
   }
 
-  const prefix = kind === 'key' ? 'key' : 'ticket';
+  const channelName = nextTicketChannelName(interaction.guild, category.id, kind);
   const channel = await interaction.guild.channels.create({
-    name: `${prefix}-${cleanName(interaction.user.username)}`,
+    name: channelName,
     type: ChannelType.GuildText,
     parent: category.id,
     topic: topicMarker,
@@ -239,9 +318,12 @@ async function openTicket(interaction, kind) {
 }
 
 async function publishTicketPanel(interaction, kind) {
-  const channel = interaction.options.getChannel('canal') || interaction.channel;
-  if (!channel?.isTextBased()) {
-    await interaction.reply({ content: 'Ese canal no permite mensajes.', ephemeral: true });
+  const channel = await resolveTargetChannel(interaction);
+  if (!channel) {
+    await interaction.reply({
+      content: 'Elige un canal de texto valido o pega su ID en canal_id.',
+      ephemeral: true,
+    });
     return;
   }
 
@@ -282,9 +364,12 @@ async function publishTicketPanel(interaction, kind) {
 }
 
 async function handlePublicarEmbed(interaction) {
-  const channel = interaction.options.getChannel('canal');
-  if (!channel?.isTextBased()) {
-    await interaction.reply({ content: 'Ese canal no permite mensajes.', ephemeral: true });
+  const channel = await resolveTargetChannel(interaction);
+  if (!channel) {
+    await interaction.reply({
+      content: 'Elige un canal de texto valido o pega su ID en canal_id.',
+      ephemeral: true,
+    });
     return;
   }
 
@@ -437,7 +522,15 @@ async function handlePublicarEmbedModal(interaction) {
 }
 
 async function handleAnnouncement(interaction) {
-  const channel = interaction.options.getChannel('canal');
+  const channel = await resolveTargetChannel(interaction);
+  if (!channel) {
+    await interaction.reply({
+      content: 'Elige un canal de texto valido o pega su ID en canal_id.',
+      ephemeral: true,
+    });
+    return;
+  }
+
   const imageUrl = imageFromOptions(interaction, 'foto', 'imagen_url');
   const logoUrl = imageFromOptions(interaction, 'logo', 'logo_url');
   const embed = applyImages(
@@ -519,7 +612,8 @@ client.on('interactionCreate', async (interaction) => {
               '`/anuncio` — anuncio con banner/logo',
               '`/mute`, `/kick`, `/ban` — moderación',
               '',
-              `Categoría de tickets: **${process.env.TICKET_CATEGORY_NAME || 'TIKET'}**`,
+              `Tickets normales: **${process.env.TICKET_CATEGORY_NAME || 'TIKET'}**`,
+              `Tickets gratis: **${process.env.FREE_KEYS_CATEGORY_NAME || 'TIKET GRATIS'}**`,
             ].join('\n'))
             .setFooter({ text: 'YOJHAN_CHEATS' });
           await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -587,7 +681,7 @@ if (keepAlive) {
         JSON.stringify({
           ok: true,
           bot: client.user?.tag || 'connecting',
-          version: 'publicar-embed-foto-ticket-sync-20260914',
+          version: 'ticket-categorias-canales-20260914',
           uptime: Math.round(process.uptime()),
           path: req.url,
         }),

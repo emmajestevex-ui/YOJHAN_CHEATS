@@ -157,68 +157,134 @@ function buildTicketOverwrites(guild, userId, botUserId) {
   return overwrites;
 }
 
-async function fetchConfiguredCategory(guild, categoryId) {
+async function fetchConfiguredCategory(guild, categoryId, label = "TICKET_CATEGORY_ID") {
   if (!categoryId) return null;
   const channel = await guild.channels.fetch(categoryId).catch(() => null);
   if (!channel) {
-    console.warn(`[tickets] No encontre la categoria configurada: ${categoryId}`);
+    console.warn(`[tickets] No encontre la categoria configurada en ${label}: ${categoryId}`);
     return null;
   }
 
   if (channel.type !== ChannelType.GuildCategory) {
-    console.warn(`[tickets] TICKET_CATEGORY_ID debe ser una categoria, no un canal: ${channel.name}`);
+    console.warn(`[tickets] ${label} debe ser una categoria, no un canal: ${channel.name}`);
     return null;
   }
 
   return channel;
 }
 
-async function findTicketCategory(guild) {
-  const configured = await fetchConfiguredCategory(guild, config.ticketCategoryId);
+function ticketCategorySettings(type) {
+  const normalizedType = normalizeTicketType(type);
+  if (normalizedType === TICKET_TYPES.FREE_KEY) {
+    return {
+      id: config.freeKeysCategoryId,
+      idLabel: "FREE_KEYS_CATEGORY_ID",
+      name: config.freeKeysCategoryName || "TIKET GRATIS",
+      acceptedNames: [
+        config.freeKeysCategoryName,
+        "TIKET GRATIS",
+        "TICKET GRATIS",
+        "KEY GRATIS",
+        "KEYS GRATIS"
+      ]
+    };
+  }
+
+  return {
+    id: config.ticketCategoryId,
+    idLabel: "TICKET_CATEGORY_ID",
+    name: config.ticketCategoryName || "TIKET",
+    acceptedNames: [
+      config.ticketCategoryName,
+      "TIKET",
+      "TICKET",
+      "TICKETS"
+    ]
+  };
+}
+
+function findExistingTicketCategory(guild, type) {
+  const settings = ticketCategorySettings(type);
+  const wantedNames = new Set(settings.acceptedNames.map(normalizeName).filter(Boolean));
+
+  return guild.channels.cache.find((channel) =>
+    channel.type === ChannelType.GuildCategory && wantedNames.has(normalizeName(channel.name))
+  );
+}
+
+async function findTicketCategory(guild, type) {
+  const normalizedType = normalizeTicketType(type);
+  const settings = ticketCategorySettings(normalizedType);
+
+  await guild.channels.fetch().catch(() => null);
+
+  const configured = await fetchConfiguredCategory(guild, settings.id, settings.idLabel);
   if (configured) return configured;
 
-  const wantedNames = [
-    normalizeName(config.ticketCategoryName),
-    "tiket",
-    "ticket",
-    "tickets"
-  ].filter(Boolean);
-
-  const categories = guild.channels.cache
-    .filter((channel) => channel.type === ChannelType.GuildCategory)
-    .filter((channel) => {
-      const name = normalizeName(channel.name);
-      return wantedNames.some((wanted) => name.includes(wanted));
-    })
-    .sort((left, right) => (right.rawPosition ?? 0) - (left.rawPosition ?? 0));
-
-  const existing = categories.first();
+  const existing = findExistingTicketCategory(guild, normalizedType);
   if (existing) return existing;
 
   const created = await guild.channels.create({
-    name: config.ticketCategoryName || "TIKET",
+    name: settings.name,
     type: ChannelType.GuildCategory,
     reason: "Categoria de tickets creada por YOJHAN_CHEATS"
   });
 
-  const lastPosition = guild.channels.cache
+  const normalCategory = normalizedType === TICKET_TYPES.FREE_KEY
+    ? findExistingTicketCategory(guild, TICKET_TYPES.NORMAL)
+    : null;
+  const position = normalCategory
+    ? (normalCategory.rawPosition ?? 0) + 1
+    : guild.channels.cache
     .filter((channel) => channel.type === ChannelType.GuildCategory)
     .reduce((max, channel) => Math.max(max, channel.rawPosition ?? 0), 0);
 
-  await created.setPosition(lastPosition).catch(() => {});
+  await created.setPosition(position).catch(() => {});
   return created;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function ticketChannelPrefix(type) {
+  const normalizedType = normalizeTicketType(type);
+  const fallback = normalizedType === TICKET_TYPES.FREE_KEY ? "tiket-gratis" : "tiket";
+  const configuredPrefix = normalizedType === TICKET_TYPES.FREE_KEY
+    ? config.freeKeyTicketNamePrefix
+    : config.ticketNamePrefix;
+
+  return sanitizeChannelName(cleanInput(configuredPrefix) || fallback);
+}
+
+function nextTicketChannelName(guild, categoryId, type) {
+  const prefix = ticketChannelPrefix(type);
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)$`, "i");
+  let maxNumber = 0;
+
+  for (const channel of guild.channels.cache.values()) {
+    if (channel.type !== ChannelType.GuildText) continue;
+    if (categoryId && channel.parentId !== categoryId) continue;
+
+    const match = channel.name.match(pattern);
+    if (match) {
+      maxNumber = Math.max(maxNumber, Number.parseInt(match[1], 10) || 0);
+    }
+  }
+
+  return `${prefix}-${maxNumber + 1}`;
 }
 
 function ticketCreateErrorMessage(error) {
   if (error?.code === 50013) {
-    return "No puedo crear el ticket porque me falta permiso de Administrar canales o no tengo acceso a la categoria TIKET.";
+    return "No puedo crear el ticket porque me falta permiso de Administrar canales o no tengo acceso a la categoria TIKET/TIKET GRATIS.";
   }
 
   if (error?.code === 50035) {
-    return "No pude crear el ticket porque hay una categoria o rol mal configurado. Revisa que TICKET_CATEGORY_ID sea el ID de una categoria, no de un canal.";
+    return "No pude crear el ticket porque hay una categoria o rol mal configurado. Revisa que los IDs configurados sean de categorias, no de canales.";
   }
 
-  return "No pude crear el ticket. Revisa permisos del bot, categoria TIKET y jerarquia de roles.";
+  return "No pude crear el ticket. Revisa permisos del bot, categorias TIKET/TIKET GRATIS y jerarquia de roles.";
 }
 
 function findExistingTicket(guild, userId, type) {
@@ -265,14 +331,11 @@ async function openTicket(interaction, type) {
     return;
   }
 
-  const prefix = normalizedType === TICKET_TYPES.FREE_KEY
-    ? config.freeKeyTicketNamePrefix
-    : config.ticketNamePrefix;
-  const channelName = `${sanitizeChannelName(prefix)}-${sanitizeChannelName(interaction.user.username)}-${interaction.user.id.slice(-4)}`.slice(0, 100);
   let channel;
 
   try {
-    const category = await findTicketCategory(interaction.guild);
+    const category = await findTicketCategory(interaction.guild, normalizedType);
+    const channelName = nextTicketChannelName(interaction.guild, category?.id, normalizedType);
     channel = await interaction.guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,

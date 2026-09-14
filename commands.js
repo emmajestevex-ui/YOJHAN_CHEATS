@@ -1,7 +1,6 @@
 const {
   SlashCommandBuilder,
   PermissionFlagsBits,
-  ChannelType,
 } = require('discord.js');
 
 const imageOptions = (builder) =>
@@ -19,37 +18,44 @@ const imageOptions = (builder) =>
       o.setName('logo_url').setDescription('URL directa del logo pequeño').setRequired(false),
     );
 
+const destinationOptions = (builder, description) =>
+  builder
+    .addChannelOption((o) =>
+      o
+        .setName('canal')
+        .setDescription(description)
+        .setRequired(false),
+    )
+    .addStringOption((o) =>
+      o
+        .setName('canal_id')
+        .setDescription('ID del canal si no aparece en la lista')
+        .setRequired(false),
+    );
+
 const commands = [];
 
 commands.push(
   imageOptions(
-    new SlashCommandBuilder()
-      .setName('publicar-embed')
-      .setDescription('Abre un formulario para crear y publicar un embed YOJHAN_CHEATS.')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-      .addChannelOption((o) =>
-        o
-          .setName('canal')
-          .setDescription('Canal donde se publicará el embed')
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-          .setRequired(true),
-      ),
+    destinationOptions(
+      new SlashCommandBuilder()
+        .setName('publicar-embed')
+        .setDescription('Abre un formulario para crear y publicar un embed YOJHAN_CHEATS.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+      'Canal donde se publicará el embed',
+    ),
   ),
 );
 
 commands.push(
   imageOptions(
-    new SlashCommandBuilder()
-      .setName('ticket-panel')
-      .setDescription('Publica un panel para abrir tickets normales.')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-      .addChannelOption((o) =>
-        o
-          .setName('canal')
-          .setDescription('Canal donde se publicará el panel')
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-          .setRequired(false),
-      )
+    destinationOptions(
+      new SlashCommandBuilder()
+        .setName('ticket-panel')
+        .setDescription('Publica un panel para abrir tickets normales.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+      'Canal donde se publicará el panel',
+    )
       .addStringOption((o) =>
         o.setName('titulo').setDescription('Título del panel').setRequired(false),
       )
@@ -64,17 +70,13 @@ commands.push(
 
 commands.push(
   imageOptions(
-    new SlashCommandBuilder()
-      .setName('key-panel')
-      .setDescription('Publica un panel para tickets de key gratis.')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-      .addChannelOption((o) =>
-        o
-          .setName('canal')
-          .setDescription('Canal donde se publicará el panel')
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-          .setRequired(false),
-      )
+    destinationOptions(
+      new SlashCommandBuilder()
+        .setName('key-panel')
+        .setDescription('Publica un panel para tickets de key gratis.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+      'Canal donde se publicará el panel',
+    )
       .addStringOption((o) =>
         o.setName('titulo').setDescription('Título del panel').setRequired(false),
       )
@@ -89,22 +91,18 @@ commands.push(
 
 commands.push(
   imageOptions(
-    new SlashCommandBuilder()
-      .setName('anuncio')
-      .setDescription('Publica un anuncio con imagen/banner y logo opcionales.')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-      .addChannelOption((o) =>
-        o
-          .setName('canal')
-          .setDescription('Canal donde se publicará el anuncio')
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-          .setRequired(true),
-      )
-      .addStringOption((o) =>
-        o.setName('titulo').setDescription('Título del anuncio').setRequired(true),
-      )
-      .addStringOption((o) =>
-        o.setName('descripcion').setDescription('Texto del anuncio').setRequired(true),
+    destinationOptions(
+      new SlashCommandBuilder()
+        .setName('anuncio')
+        .setDescription('Publica un anuncio con imagen/banner y logo opcionales.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+        .addStringOption((o) =>
+          o.setName('titulo').setDescription('Título del anuncio').setRequired(true),
+        )
+        .addStringOption((o) =>
+          o.setName('descripcion').setDescription('Texto del anuncio').setRequired(true),
+        ),
+      'Canal donde se publicará el anuncio',
       )
       .addStringOption((o) =>
         o.setName('color').setDescription('Color HEX, ejemplo #ff1f1f').setRequired(false),

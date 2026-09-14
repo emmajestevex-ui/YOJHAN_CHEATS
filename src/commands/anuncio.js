@@ -1,6 +1,7 @@
-const { ChannelType, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
+const { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
 
 const { config } = require("../config");
+const { resolveSendableChannel } = require("../utils/channels");
 const { parseColor } = require("../utils/colors");
 const { readImageOption } = require("../utils/images");
 const { requireStaff } = require("../utils/permissions");
@@ -12,13 +13,6 @@ module.exports = {
     .setDescription("Publica un anuncio embed con estetica YOJHAN_CHEATS.")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption((option) =>
-      option
-        .setName("canal")
-        .setDescription("Canal donde se publicara el anuncio.")
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-        .setRequired(true)
-    )
     .addStringOption((option) =>
       option
         .setName("titulo")
@@ -32,6 +26,18 @@ module.exports = {
         .setDescription("Contenido del anuncio.")
         .setRequired(true)
         .setMaxLength(1800)
+    )
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal donde se publicara el anuncio.")
+        .setRequired(false)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("canal_id")
+        .setDescription("ID del canal si no aparece en la lista.")
+        .setRequired(false)
     )
     .addBooleanOption((option) =>
       option
@@ -76,7 +82,12 @@ module.exports = {
 
     await interaction.deferReply({ ephemeral: true });
 
-    const channel = interaction.options.getChannel("canal", true);
+    const target = await resolveSendableChannel(interaction);
+    if (target.error) {
+      await interaction.editReply(target.error);
+      return;
+    }
+
     const image = readImageOption(interaction, "foto", "imagen");
     const thumbnail = readImageOption(interaction, "logo", "logo_url");
 
@@ -96,12 +107,12 @@ module.exports = {
     if (thumbnail.url) embed.setThumbnail(thumbnail.url);
 
     const everyone = interaction.options.getBoolean("everyone") || false;
-    await channel.send({
+    await target.channel.send({
       content: everyone ? "@everyone" : undefined,
       embeds: [embed],
       allowedMentions: everyone ? { parse: ["everyone"] } : { parse: [] }
     });
 
-    await interaction.editReply(`Anuncio publicado en ${channel}.`);
+    await interaction.editReply(`Anuncio publicado en ${target.channel}.`);
   }
 };

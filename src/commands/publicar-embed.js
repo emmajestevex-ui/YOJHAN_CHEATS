@@ -1,7 +1,8 @@
-const { ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
+const { PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
 
 const adminEmbedService = require("../services/adminEmbedService");
 const { TICKET_TYPES } = require("../constants");
+const { resolveSendableChannel } = require("../utils/channels");
 const { captureImageOption } = require("../utils/images");
 const { requireStaff } = require("../utils/permissions");
 
@@ -15,8 +16,13 @@ module.exports = {
       option
         .setName("canal")
         .setDescription("Canal donde se publicara el embed.")
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-        .setRequired(true)
+        .setRequired(false)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("canal_id")
+        .setDescription("ID del canal si no aparece en la lista.")
+        .setRequired(false)
     )
     .addAttachmentOption((option) =>
       option
@@ -76,7 +82,15 @@ module.exports = {
     const allowed = await requireStaff(interaction, "publicar embeds administrativos", PermissionFlagsBits.ManageGuild);
     if (!allowed) return;
 
-    const channel = interaction.options.getChannel("canal", true);
+    const target = await resolveSendableChannel(interaction);
+    if (target.error) {
+      await interaction.reply({
+        content: target.error,
+        ephemeral: true
+      });
+      return;
+    }
+
     const image = await captureImageOption(interaction, "foto", "imagen_url", "foto");
     const thumbnail = await captureImageOption(interaction, "logo", "logo_url", "logo");
 
@@ -88,7 +102,7 @@ module.exports = {
       return;
     }
 
-    await adminEmbedService.showKnownChannelModal(interaction, channel.id, {
+    await adminEmbedService.showKnownChannelModal(interaction, target.channel.id, {
       bannerMedia: image.media,
       thumbnailMedia: thumbnail.media,
       mentionEveryone: interaction.options.getBoolean("everyone") || false,

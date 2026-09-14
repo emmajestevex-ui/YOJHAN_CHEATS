@@ -3,25 +3,15 @@ const { PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
 const ticketService = require("../services/ticketService");
 const { TICKET_TYPES } = require("../constants");
 const { resolveSendableChannel } = require("../utils/channels");
-const { requireStaff } = require("../utils/permissions");
 const { readImageOption } = require("../utils/images");
+const { requireStaff } = require("../utils/permissions");
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("ticket-panel")
-    .setDescription("Publica un panel de tickets normal o de keys gratis.")
+    .setName("key-panel")
+    .setDescription("Publica un panel para tickets de key gratis.")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-    .addStringOption((option) =>
-      option
-        .setName("tipo")
-        .setDescription("Tipo de ticket que abrira el boton.")
-        .addChoices(
-          { name: "normal", value: TICKET_TYPES.NORMAL },
-          { name: "keys gratis", value: TICKET_TYPES.FREE_KEY }
-        )
-        .setRequired(true)
-    )
     .addChannelOption((option) =>
       option
         .setName("canal")
@@ -81,10 +71,9 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const allowed = await requireStaff(interaction, "publicar paneles de tickets", PermissionFlagsBits.ManageChannels);
+    const allowed = await requireStaff(interaction, "publicar paneles de keys gratis", PermissionFlagsBits.ManageChannels);
     if (!allowed) return;
 
-    const type = interaction.options.getString("tipo", true);
     const target = await resolveSendableChannel(interaction);
     if (target.error) {
       await interaction.reply({
@@ -105,7 +94,7 @@ module.exports = {
       return;
     }
 
-    await ticketService.sendTicketPanel(interaction, target.channel, type, {
+    await ticketService.sendTicketPanel(interaction, target.channel, TICKET_TYPES.FREE_KEY, {
       title: interaction.options.getString("titulo"),
       description: interaction.options.getString("descripcion"),
       imageUrl: image.url,
