@@ -6,7 +6,13 @@ function startKeepAlive(config) {
   const server = http.createServer((request, response) => {
     if (request.url === "/health" || request.url === "/") {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, service: "YOJHAN_CHEATS", uptime: process.uptime() }));
+      response.end(JSON.stringify({
+        ok: true,
+        service: "YOJHAN_CHEATS",
+        version: "publicar-embed-foto-ticket-20260914",
+        uptime: process.uptime(),
+        path: request.url
+      }));
       return;
     }
 
