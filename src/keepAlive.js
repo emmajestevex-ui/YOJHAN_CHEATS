@@ -9,7 +9,7 @@ function startKeepAlive(config) {
       response.end(JSON.stringify({
         ok: true,
         service: "YOJHAN_CHEATS",
-        version: "publicar-embed-foto-ticket-20260914",
+        version: "publicar-embed-foto-ticket-sync-20260914",
         uptime: process.uptime(),
         path: request.url
       }));

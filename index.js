@@ -587,7 +587,7 @@ if (keepAlive) {
         JSON.stringify({
           ok: true,
           bot: client.user?.tag || 'connecting',
-          version: 'publicar-embed-foto-ticket-20260914',
+          version: 'publicar-embed-foto-ticket-sync-20260914',
           uptime: Math.round(process.uptime()),
           path: req.url,
         }),
