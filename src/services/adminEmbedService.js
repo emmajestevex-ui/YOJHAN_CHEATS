@@ -23,6 +23,7 @@ const {
 } = require("../utils/text");
 
 const drafts = new Map();
+const modalPrefills = new Map();
 const DRAFT_TTL_MS = 60 * 60 * 1000;
 
 function createTextInput(customId, label, style, options = {}) {
@@ -41,6 +42,25 @@ function createTextInput(customId, label, style, options = {}) {
 
 function normalizeChannelId(value) {
   return cleanInput(value).replace(/[<#>]/g, "");
+}
+
+function mediaFromUrl(url) {
+  const cleanUrl = cleanInput(url);
+  return cleanUrl && isHttpUrl(cleanUrl) ? { type: "url", url: cleanUrl } : null;
+}
+
+function applyMedia(embed, media, methodName, files) {
+  if (!media) return;
+
+  if (media.type === "url" && isHttpUrl(media.url)) {
+    embed[methodName](media.url);
+    return;
+  }
+
+  if (media.type === "attachment" && media.fileName && media.buffer) {
+    embed[methodName](`attachment://${media.fileName}`);
+    files.push({ attachment: media.buffer, name: media.fileName });
+  }
 }
 
 function getModalValue(interaction, fieldId) {
@@ -64,16 +84,33 @@ function newDraft(data) {
     features: data.features,
     color: data.color,
     footer: data.footer || "YOJHAN_CHEATS",
-    bannerUrl: "",
-    thumbnailUrl: "",
-    mentionEveryone: false,
-    ticketButton: true,
-    ticketType: TICKET_TYPES.NORMAL,
-    ticketLabel: "Abrir ticket"
+    bannerUrl: data.bannerUrl || "",
+    thumbnailUrl: data.thumbnailUrl || "",
+    bannerMedia: data.bannerMedia || mediaFromUrl(data.bannerUrl),
+    thumbnailMedia: data.thumbnailMedia || mediaFromUrl(data.thumbnailUrl),
+    mentionEveryone: data.mentionEveryone || false,
+    ticketButton: data.ticketButton ?? true,
+    ticketType: data.ticketType || TICKET_TYPES.NORMAL,
+    ticketLabel: data.ticketLabel || "Abrir ticket"
   };
 
   drafts.set(id, draft);
   return draft;
+}
+
+function hasPrefillValue(data = {}) {
+  return Object.values(data).some((value) => value !== undefined && value !== null && value !== "");
+}
+
+function createModalPrefill(data = {}) {
+  if (!hasPrefillValue(data)) return null;
+
+  const id = crypto.randomUUID().slice(0, 8);
+  modalPrefills.set(id, {
+    ...data,
+    createdAt: Date.now()
+  });
+  return id;
 }
 
 function pruneDrafts() {
@@ -83,6 +120,32 @@ function pruneDrafts() {
       drafts.delete(id);
     }
   }
+
+  for (const [id, prefill] of modalPrefills.entries()) {
+    if (now - prefill.createdAt > DRAFT_TTL_MS) {
+      modalPrefills.delete(id);
+    }
+  }
+}
+
+function takeModalPrefill(prefillId) {
+  pruneDrafts();
+  if (!prefillId) return {};
+
+  const prefill = modalPrefills.get(prefillId);
+  modalPrefills.delete(prefillId);
+
+  if (!prefill) return {};
+  const { createdAt, ...data } = prefill;
+  return data;
+}
+
+function parseKnownModalPayload(payload) {
+  const [channelId, prefillId] = String(payload || "").split(":");
+  return {
+    channelId,
+    prefillId
+  };
 }
 
 async function getDraftOrReply(interaction, draftId) {
@@ -107,7 +170,7 @@ async function getDraftOrReply(interaction, draftId) {
   return draft;
 }
 
-function buildAdminEmbed(draft) {
+function buildAdminEmbed(draft, files = []) {
   const embed = new EmbedBuilder()
     .setColor(draft.color || config.defaultEmbedColor)
     .setTitle(truncate(draft.title, 256))
@@ -119,13 +182,8 @@ function buildAdminEmbed(draft) {
     embed.addFields({ name: "Funciones", value: functions, inline: false });
   }
 
-  if (draft.thumbnailUrl && isHttpUrl(draft.thumbnailUrl)) {
-    embed.setThumbnail(draft.thumbnailUrl);
-  }
-
-  if (draft.bannerUrl && isHttpUrl(draft.bannerUrl)) {
-    embed.setImage(draft.bannerUrl);
-  }
+  applyMedia(embed, draft.thumbnailMedia || mediaFromUrl(draft.thumbnailUrl), "setThumbnail", files);
+  applyMedia(embed, draft.bannerMedia || mediaFromUrl(draft.bannerUrl), "setImage", files);
 
   if (draft.footer) {
     embed.setFooter({ text: truncate(draft.footer, 2048) });
@@ -135,9 +193,11 @@ function buildAdminEmbed(draft) {
 }
 
 function buildEmbedPayload(draft) {
+  const files = [];
   const payload = {
     content: draft.mentionEveryone ? "@everyone" : undefined,
-    embeds: [buildAdminEmbed(draft)],
+    embeds: [buildAdminEmbed(draft, files)],
+    files,
     components: [],
     allowedMentions: draft.mentionEveryone ? { parse: ["everyone"] } : { parse: [] }
   };
@@ -191,9 +251,11 @@ function previewContent(draft) {
 }
 
 async function replyWithPreview(interaction, draft) {
+  const files = [];
   await interaction.reply({
     content: previewContent(draft),
-    embeds: [buildAdminEmbed(draft)],
+    embeds: [buildAdminEmbed(draft, files)],
+    files,
     components: buildPreviewRows(draft.id),
     ephemeral: true
   });
@@ -228,9 +290,14 @@ async function showAdminPanel(interaction) {
   });
 }
 
-async function showKnownChannelModal(interaction, channelId) {
+async function showKnownChannelModal(interaction, channelId, prefill = {}) {
+  const prefillId = createModalPrefill(prefill);
+  const customId = prefillId
+    ? `${CUSTOM_IDS.ADMIN_EMBED_MODAL_KNOWN_PREFIX}${channelId}:${prefillId}`
+    : `${CUSTOM_IDS.ADMIN_EMBED_MODAL_KNOWN_PREFIX}${channelId}`;
+
   const modal = new ModalBuilder()
-    .setCustomId(`${CUSTOM_IDS.ADMIN_EMBED_MODAL_KNOWN_PREFIX}${channelId}`)
+    .setCustomId(customId)
     .setTitle("Embed YOJHAN_CHEATS");
 
   modal.addComponents(
@@ -356,7 +423,7 @@ async function showOptionsModal(interaction, draft) {
   await interaction.showModal(modal);
 }
 
-function draftFromPrimaryModal(interaction, targetChannelId) {
+function draftFromPrimaryModal(interaction, targetChannelId, prefill = {}) {
   const colorInput = cleanInput(getModalValue(interaction, "color"));
   return newDraft({
     userId: interaction.user.id,
@@ -366,7 +433,15 @@ function draftFromPrimaryModal(interaction, targetChannelId) {
     description: getModalValue(interaction, "description"),
     features: cleanInput(getModalValue(interaction, "features")),
     color: parseColor(colorInput, config.defaultEmbedColor),
-    footer: cleanInput(getModalValue(interaction, "footer"))
+    footer: cleanInput(getModalValue(interaction, "footer")),
+    bannerUrl: prefill.bannerUrl,
+    thumbnailUrl: prefill.thumbnailUrl,
+    bannerMedia: prefill.bannerMedia,
+    thumbnailMedia: prefill.thumbnailMedia,
+    mentionEveryone: prefill.mentionEveryone,
+    ticketButton: prefill.ticketButton,
+    ticketType: prefill.ticketType,
+    ticketLabel: prefill.ticketLabel
   });
 }
 
@@ -472,8 +547,9 @@ async function handleModal(interaction) {
   const id = interaction.customId;
 
   if (id.startsWith(CUSTOM_IDS.ADMIN_EMBED_MODAL_KNOWN_PREFIX)) {
-    const channelId = id.slice(CUSTOM_IDS.ADMIN_EMBED_MODAL_KNOWN_PREFIX.length);
-    const draft = draftFromPrimaryModal(interaction, channelId);
+    const payload = id.slice(CUSTOM_IDS.ADMIN_EMBED_MODAL_KNOWN_PREFIX.length);
+    const { channelId, prefillId } = parseKnownModalPayload(payload);
+    const draft = draftFromPrimaryModal(interaction, channelId, takeModalPrefill(prefillId));
     await replyWithPreview(interaction, draft);
     return;
   }
@@ -502,6 +578,8 @@ async function handleModal(interaction) {
 
     draft.bannerUrl = bannerUrl;
     draft.thumbnailUrl = thumbnailUrl;
+    draft.bannerMedia = mediaFromUrl(bannerUrl);
+    draft.thumbnailMedia = mediaFromUrl(thumbnailUrl);
     await replyWithPreview(interaction, draft);
     return;
   }
