@@ -1,8 +1,4 @@
 const {
-  WebcastPushConnection
-} = require("tiktok-live-connector");
-
-const {
   EmbedBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -18,16 +14,14 @@ const TIKTOK_USERS = [
   "emmanuelrhlm19"
 ];
 
-// ID del canal 🔴・LIVE
 const LIVE_CHANNEL_ID = "1549623203876442177";
 
 // Revisar cada 60 segundos
 const CHECK_INTERVAL = 60 * 1000;
 
-// Estado de cada cuenta
+// Estado anterior de cada cuenta
 const liveStates = new Map();
 
-// Evita comprobaciones simultáneas
 let checking = false;
 
 
@@ -36,84 +30,123 @@ let checking = false;
 // ==========================================
 
 async function checkUser(client, username) {
+  let connection = null;
+
   try {
     console.log(`[TikTok] Comprobando @${username}...`);
 
-    const connection = new WebcastPushConnection(username);
+    // tiktok-live-connector 2.x es ESM
+    const {
+      TikTokLiveConnection
+    } = await import("tiktok-live-connector");
 
-    const isLive = await connection.fetchIsLive();
+    connection = new TikTokLiveConnection(username);
+
+    let isLive = false;
+
+    try {
+      const state = await connection.connect();
+
+      isLive = true;
+
+      console.log(
+        `[TikTok] ✅ @${username} está LIVE | Room: ${state.roomId}`
+      );
+
+    } catch (error) {
+
+      isLive = false;
+
+      console.log(
+        `[TikTok] @${username} no está LIVE o TikTok rechazó la conexión: ${error.message}`
+      );
+    }
 
     const wasLive = liveStates.get(username) ?? false;
 
-    console.log(
-      `[TikTok] @${username} LIVE: ${isLive}`
-    );
 
     // ======================================
-    // LIVE ACABA DE COMENZAR
+    // ACABA DE INICIAR LIVE
     // ======================================
 
     if (isLive && !wasLive) {
 
       console.log(
-        `[TikTok] Nuevo LIVE detectado: @${username}`
+        `[TikTok] 🔴 NUEVO LIVE DETECTADO: @${username}`
       );
 
       const channel = await client.channels
         .fetch(LIVE_CHANNEL_ID)
         .catch(error => {
+
           console.error(
-            "[TikTok] Error buscando el canal:",
+            "[TikTok] Error buscando canal:",
             error.message
           );
 
           return null;
         });
 
+
       if (!channel) {
+
         console.error(
-          `[TikTok] No existe el canal ${LIVE_CHANNEL_ID}`
+          `[TikTok] ❌ No existe el canal ${LIVE_CHANNEL_ID}`
         );
 
+        liveStates.set(username, isLive);
         return;
       }
+
 
       if (!channel.isTextBased()) {
+
         console.error(
-          "[TikTok] El canal configurado no permite mensajes."
+          "[TikTok] ❌ El canal no permite mensajes."
         );
 
+        liveStates.set(username, isLive);
         return;
       }
+
 
       const liveURL =
         `https://www.tiktok.com/@${username}/live`;
+
 
       const embed = new EmbedBuilder()
         .setColor(0xff1744)
         .setTitle("🔴 ¡NUEVO LIVE EN TIKTOK!")
         .setDescription(
           `**@${username}** acaba de iniciar un LIVE.\n\n` +
-          `🔥 **¡ENTREN AL LIVE!**`
+          `🔥 **¡ENTREN AL LIVE!**\n\n` +
+          `🎮 **YOJHAN CHEATS**`
         )
+        .setURL(liveURL)
         .setFooter({
           text: "YOJHAN CHEATS • TikTok LIVE"
         })
         .setTimestamp();
+
 
       const button = new ButtonBuilder()
         .setLabel("🔴 VER LIVE")
         .setStyle(ButtonStyle.Link)
         .setURL(liveURL);
 
+
       const row = new ActionRowBuilder()
         .addComponents(button);
+
 
       try {
 
         await channel.send({
-          content: "@everyone",
+          content:
+            `@everyone 🔴 **@${username} ESTÁ EN LIVE!**`,
+
           embeds: [embed],
+
           components: [row],
 
           allowedMentions: {
@@ -121,14 +154,16 @@ async function checkUser(client, username) {
           }
         });
 
+
         console.log(
-          `[TikTok] ✅ Aviso enviado correctamente para @${username}`
+          `[TikTok] ✅ AVISO ENVIADO A DISCORD: @${username}`
         );
+
 
       } catch (error) {
 
         console.error(
-          `[TikTok] ❌ No pude mandar el aviso de @${username}:`,
+          `[TikTok] ❌ Error enviando mensaje a Discord:`,
           error
         );
 
@@ -137,29 +172,40 @@ async function checkUser(client, username) {
 
 
     // ======================================
-    // LIVE TERMINÓ
+    // TERMINÓ LIVE
     // ======================================
 
     if (!isLive && wasLive) {
 
       console.log(
-        `[TikTok] 🔴 @${username} terminó el LIVE.`
+        `[TikTok] ⚫ @${username} terminó el LIVE.`
       );
 
     }
 
 
-    // Guardar estado
     liveStates.set(username, isLive);
 
 
   } catch (error) {
 
     console.error(
-      `[TikTok] ❌ Error comprobando @${username}:`
+      `[TikTok] ❌ Error general comprobando @${username}:`,
+      error
     );
 
-    console.error(error);
+  } finally {
+
+    // No necesitamos mantener conexión permanente.
+    if (connection) {
+
+      try {
+        connection.disconnect();
+      } catch (_) {
+        // Ignorar
+      }
+
+    }
 
   }
 }
@@ -172,14 +218,17 @@ async function checkUser(client, username) {
 async function checkTikTokLives(client) {
 
   if (checking) {
+
     console.log(
-      "[TikTok] Ya hay una comprobación ejecutándose."
+      "[TikTok] Esperando comprobación anterior..."
     );
 
     return;
   }
 
+
   checking = true;
+
 
   try {
 
@@ -189,18 +238,12 @@ async function checkTikTokLives(client) {
 
     }
 
-  } catch (error) {
-
-    console.error(
-      "[TikTok] Error general:",
-      error
-    );
-
   } finally {
 
     checking = false;
 
   }
+
 }
 
 
@@ -210,12 +253,13 @@ async function checkTikTokLives(client) {
 
 function startTikTokLiveMonitor(client) {
 
-  console.log("=================================");
-  console.log("🔴 TIKTOK LIVE MONITOR");
-  console.log("=================================");
+  console.log("");
+  console.log("==========================================");
+  console.log("🔴 YOJHAN CHEATS - TIKTOK LIVE MONITOR");
+  console.log("==========================================");
 
   console.log(
-    `[TikTok] Monitor iniciado para: ${TIKTOK_USERS
+    `[TikTok] Cuentas: ${TIKTOK_USERS
       .map(user => `@${user}`)
       .join(", ")}`
   );
@@ -225,18 +269,23 @@ function startTikTokLiveMonitor(client) {
   );
 
   console.log(
-    `[TikTok] Intervalo: ${CHECK_INTERVAL / 1000} segundos`
+    `[TikTok] Comprobación cada ${CHECK_INTERVAL / 1000}s`
   );
 
-  // Revisar inmediatamente
+  console.log("==========================================");
+  console.log("");
+
+
+  // Comprobar inmediatamente
   checkTikTokLives(client);
 
-  // Revisar cada minuto
-  setInterval(() => {
 
-    checkTikTokLives(client);
+  // Después cada minuto
+  setInterval(
+    () => checkTikTokLives(client),
+    CHECK_INTERVAL
+  );
 
-  }, CHECK_INTERVAL);
 }
 
 
