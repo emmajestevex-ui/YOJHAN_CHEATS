@@ -9,21 +9,23 @@ const { deployCommands } = require("./deploy-commands");
 const { startKeepAlive } = require("./keepAlive");
 const { loadCommands } = require("./utils/loadCommands");
 
-// 🔴 TIKTOK LIVE
-const { startTikTokLiveMonitor } = require("./tiktokLive");
+// ==========================================
+// TIKTOK LIVE
+// ==========================================
+const {
+  startTikTokLiveMonitor
+} = require("./tiktokLiveService");
 
 
 // ==========================================
 // COMPROBAR CONFIGURACIÓN
 // ==========================================
-
 assertRuntimeConfig();
 
 
 // ==========================================
 // CREAR CLIENTE DE DISCORD
 // ==========================================
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -40,14 +42,12 @@ const client = new Client({
 // ==========================================
 // CARGAR COMANDOS
 // ==========================================
-
 loadCommands(client);
 
 
 // ==========================================
-// EVENTOS QUE UTILIZARÁ EL BOT
+// EVENTOS QUE UTILIZA EL BOT
 // ==========================================
-
 for (const event of [
   "ready",
   "interactionCreate",
@@ -77,31 +77,31 @@ for (const event of [
 // ==========================================
 // INICIAR BOT
 // ==========================================
-
 async function start() {
 
-  // Registrar comandos de Discord
+  // Registrar comandos
   await deployCommands();
 
-  // Mantener Render activo
+  // Mantener servicio de Render activo
   startKeepAlive(config);
 
-  // Iniciar sesión en Discord
+  // Conectar bot a Discord
   await client.login(config.token);
 
   console.log(
     `[START] Discord conectado como ${client.user?.tag}`
   );
 
-  // 🔴 INICIAR MONITOR DE TIKTOK
+  // ========================================
+  // INICIAR MONITOR DE TIKTOK LIVE
+  // ========================================
   startTikTokLiveMonitor(client);
 }
 
 
 // ==========================================
-// ARRANCAR
+// ARRANCAR YOJHAN CHEATS
 // ==========================================
-
 start().catch((error) => {
 
   console.error(
