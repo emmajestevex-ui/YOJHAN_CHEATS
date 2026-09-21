@@ -109,8 +109,12 @@ async function sendTicketPanel(interaction, channel, type, options = {}) {
 }
 
 function buildTicketOverwrites(guild, userId, botUserId) {
-  const staffRoleIds = [...new Set([...config.adminRoleIds, ...config.modRoleIds])]
-    .filter((roleId) => guild.roles.cache.has(roleId));
+  const staffRoleIds = [
+    ...new Set([
+      ...config.adminRoleIds,
+      ...config.programadorRoleIds
+    ])
+  ].filter((roleId) => guild.roles.cache.has(roleId));
 
   const overwrites = [
     {
