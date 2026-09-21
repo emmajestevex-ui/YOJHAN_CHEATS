@@ -10,12 +10,13 @@
     "check": "node --check index.js && node --check commands.js && node --check deploy-commands.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
- "dependencies": {
-  "@napi-rs/canvas": "^0.1.80",
-  "@supabase/supabase-js": "^2.57.4",
-  "discord.js": "^14.19.3",
-  "dotenv": "^16.5.0"
-}
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.80",
+    "@supabase/supabase-js": "^2.57.4",
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0",
+    "tiktok-live-connector": "^2.4.4"
+  }
 }
