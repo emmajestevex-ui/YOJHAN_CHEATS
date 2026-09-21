@@ -1,4 +1,3 @@
-
 const {
   WebcastPushConnection
 } = require("tiktok-live-connector");
@@ -10,30 +9,47 @@ const {
   ActionRowBuilder
 } = require("discord.js");
 
-const TIKTOK_USERNAME = "yojhancheats";
+// ==========================================
+// PERFILES DE TIKTOK A MONITOREAR
+// ==========================================
+const TIKTOK_USERS = [
+  "yojhancheats",
+  "emmanuelrhlm19"
+];
+
 const LIVE_CHANNEL_ID = "1549623203876442177";
 
-const CHECK_INTERVAL = 60 * 1000; // 1 minuto
+// Comprobar cada 60 segundos
+const CHECK_INTERVAL = 60 * 1000;
 
-let wasLive = false;
+// Guarda si cada perfil estaba en LIVE
+const liveStates = new Map();
+
+// Evita dos comprobaciones simultáneas
 let checking = false;
 
-async function checkTikTokLive(client) {
-  if (checking) return;
 
-  checking = true;
-
+// ==========================================
+// COMPROBAR UN PERFIL
+// ==========================================
+async function checkUser(client, username) {
   try {
     const connection =
-      new WebcastPushConnection(TIKTOK_USERNAME);
+      new WebcastPushConnection(username);
 
-    const isLive = await connection.fetchIsLive();
+    const isLive =
+      await connection.fetchIsLive();
+
+    const wasLive =
+      liveStates.get(username) ?? false;
 
     console.log(
-      `[TikTok] @${TIKTOK_USERNAME} LIVE: ${isLive}`
+      `[TikTok] @${username} LIVE: ${isLive}`
     );
 
-    // Acaba de iniciar LIVE
+    // ======================================
+    // ACABA DE INICIAR LIVE
+    // ======================================
     if (isLive && !wasLive) {
       const channel = await client.channels
         .fetch(LIVE_CHANNEL_ID)
@@ -48,13 +64,13 @@ async function checkTikTokLive(client) {
       }
 
       const liveURL =
-        `https://www.tiktok.com/@${TIKTOK_USERNAME}/live`;
+        `https://www.tiktok.com/@${username}/live`;
 
       const embed = new EmbedBuilder()
         .setColor(0xff1744)
-        .setTitle("🔴 ¡YOJHAN CHEATS ESTÁ EN VIVO!")
+        .setTitle("🔴 ¡NUEVO LIVE EN TIKTOK!")
         .setDescription(
-          `**@${TIKTOK_USERNAME}** acaba de iniciar un LIVE en TikTok.\n\n` +
+          `**@${username}** acaba de iniciar un LIVE.\n\n` +
           `🔥 **¡ENTREN AL LIVE!**`
         )
         .setFooter({
@@ -68,7 +84,8 @@ async function checkTikTokLive(client) {
         .setURL(liveURL);
 
       const row =
-        new ActionRowBuilder().addComponents(button);
+        new ActionRowBuilder()
+          .addComponents(button);
 
       await channel.send({
         content: "@everyone",
@@ -80,37 +97,71 @@ async function checkTikTokLive(client) {
       });
 
       console.log(
-        `[TikTok] Aviso de LIVE enviado para @${TIKTOK_USERNAME}`
+        `[TikTok] Aviso enviado: @${username}`
       );
     }
 
-    // Guardamos el estado
-    wasLive = isLive;
+    // ======================================
+    // TERMINÓ EL LIVE
+    // ======================================
+    if (!isLive && wasLive) {
+      console.log(
+        `[TikTok] @${username} terminó el LIVE.`
+      );
+    }
+
+    // Guardar estado individual
+    liveStates.set(username, isLive);
 
   } catch (error) {
     console.error(
-      "[TikTok] Error comprobando el LIVE:",
+      `[TikTok] Error comprobando @${username}:`,
       error.message
     );
+  }
+}
+
+
+// ==========================================
+// COMPROBAR TODOS LOS PERFILES
+// ==========================================
+async function checkTikTokLives(client) {
+  if (checking) {
+    return;
+  }
+
+  checking = true;
+
+  try {
+    for (const username of TIKTOK_USERS) {
+      await checkUser(client, username);
+    }
   } finally {
     checking = false;
   }
 }
 
+
+// ==========================================
+// INICIAR MONITOR
+// ==========================================
 function startTikTokLiveMonitor(client) {
   console.log(
-    `[TikTok] Monitor iniciado para @${TIKTOK_USERNAME}`
+    `[TikTok] Monitor iniciado para: ${TIKTOK_USERS
+      .map(user => `@${user}`)
+      .join(", ")}`
   );
 
-  // Primera comprobación
-  checkTikTokLive(client);
+  // Primera comprobación inmediatamente
+  checkTikTokLives(client);
 
-  // Comprobar cada minuto
+  // Después comprobar cada minuto
   setInterval(
-    () => checkTikTokLive(client),
+    () => checkTikTokLives(client),
     CHECK_INTERVAL
   );
 }
+
 
 module.exports = {
   startTikTokLiveMonitor
