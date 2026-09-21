@@ -17,15 +17,20 @@ module.exports = {
         return;
       }
 
-      // Tamaño de la tarjeta
+      // ==============================
+      // TAMAÑO DE LA TARJETA
+      // ==============================
       const width = 1000;
       const height = 450;
 
       const canvas = createCanvas(width, height);
       const ctx = canvas.getContext("2d");
 
-      // Fondo oscuro con degradado
+      // ==============================
+      // FONDO
+      // ==============================
       const gradient = ctx.createLinearGradient(0, 0, width, height);
+
       gradient.addColorStop(0, "#090909");
       gradient.addColorStop(0.5, "#171717");
       gradient.addColorStop(1, "#350000");
@@ -33,10 +38,11 @@ module.exports = {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
 
-      // Detalles rojos decorativos
+      // Línea roja izquierda
       ctx.fillStyle = "#ff1f2d";
       ctx.fillRect(0, 0, 12, height);
 
+      // Decoración roja
       ctx.globalAlpha = 0.12;
       ctx.fillStyle = "#ff0000";
 
@@ -46,7 +52,9 @@ module.exports = {
 
       ctx.globalAlpha = 1;
 
-      // Avatar del usuario
+      // ==============================
+      // AVATAR DEL USUARIO
+      // ==============================
       const avatarURL = member.user.displayAvatarURL({
         extension: "png",
         size: 512
@@ -58,7 +66,7 @@ module.exports = {
       const avatarX = (width - avatarSize) / 2;
       const avatarY = 45;
 
-      // Borde rojo del avatar
+      // Borde rojo
       ctx.beginPath();
       ctx.arc(
         width / 2,
@@ -96,7 +104,9 @@ module.exports = {
 
       ctx.restore();
 
-      // Nombre
+      // ==============================
+      // NOMBRE DEL USUARIO
+      // ==============================
       let username = member.displayName || member.user.username;
 
       if (username.length > 20) {
@@ -107,34 +117,49 @@ module.exports = {
 
       ctx.font = "bold 42px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(username, width / 2, 295);
 
-      // Texto de entrada
+      ctx.fillText(
+        username,
+        width / 2,
+        295
+      );
+
+      // ==============================
+      // TEXTO DE BIENVENIDA
+      // ==============================
       ctx.font = "32px sans-serif";
       ctx.fillStyle = "#ffffff";
+
       ctx.fillText(
         "¡ingresó al servidor!",
         width / 2,
         345
       );
 
-      // Cantidad de miembros
+      // ==============================
+      // CANTIDAD DE MIEMBROS
+      // ==============================
       ctx.font = "bold 30px sans-serif";
       ctx.fillStyle = "#ff3344";
+
       ctx.fillText(
         `Ahora somos ${member.guild.memberCount} miembros`,
         width / 2,
         395
       );
 
-      // Convertir canvas a PNG
+      // ==============================
+      // CREAR PNG
+      // ==============================
       const buffer = canvas.toBuffer("image/png");
 
       const attachment = new AttachmentBuilder(buffer, {
         name: "bienvenida.png"
       });
 
-      // Mensaje + tarjeta
+      // ==============================
+      // ENVIAR BIENVENIDA
+      // ==============================
       await channel.send({
         content: `¡${member} BIENVENID@!`,
         files: [attachment],
