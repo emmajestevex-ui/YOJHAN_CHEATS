@@ -26,6 +26,9 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
 
+const guildMemberAdd = require("./src/events/guildMemberAdd");
+guildMemberAdd(client);
+
 // Guarda temporalmente los datos escogidos antes de abrir el modal de /publicar-embed.
 const pendingEmbeds = new Map();
 const PENDING_TTL_MS = 15 * 60 * 1000;
