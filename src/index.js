@@ -1,4 +1,8 @@
-const { Client, GatewayIntentBits, Partials } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  Partials
+} = require("discord.js");
 
 const { assertRuntimeConfig, config } = require("./config");
 const { deployCommands } = require("./deploy-commands");
@@ -10,19 +14,32 @@ assertRuntimeConfig();
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers
   ],
   partials: [Partials.Channel]
 });
 
 loadCommands(client);
 
-for (const event of ["ready", "interactionCreate"]) {
+// Eventos que utilizará el bot
+for (const event of [
+  "ready",
+  "interactionCreate",
+  "guildMemberAdd"
+]) {
   const handler = require(`./events/${event}`);
+
   if (handler.once) {
-    client.once(handler.name, (...args) => handler.execute(...args));
+    client.once(
+      handler.name,
+      (...args) => handler.execute(...args)
+    );
   } else {
-    client.on(handler.name, (...args) => handler.execute(...args));
+    client.on(
+      handler.name,
+      (...args) => handler.execute(...args)
+    );
   }
 }
 
