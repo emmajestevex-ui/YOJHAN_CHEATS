@@ -14,14 +14,12 @@ const { loadCommands } = require("./utils/loadCommands");
 // ==========================================
 const {
   startTikTokLiveMonitor
-} = require("./tiktokLiveService");
-
+} = require("./services/tiktokLiveService");
 
 // ==========================================
 // COMPROBAR CONFIGURACIÓN
 // ==========================================
 assertRuntimeConfig();
-
 
 // ==========================================
 // CREAR CLIENTE DE DISCORD
@@ -38,12 +36,10 @@ const client = new Client({
   ]
 });
 
-
 // ==========================================
 // CARGAR COMANDOS
 // ==========================================
 loadCommands(client);
-
 
 // ==========================================
 // EVENTOS QUE UTILIZA EL BOT
@@ -73,7 +69,6 @@ for (const event of [
   }
 }
 
-
 // ==========================================
 // INICIAR BOT
 // ==========================================
@@ -82,10 +77,10 @@ async function start() {
   // Registrar comandos
   await deployCommands();
 
-  // Mantener servicio de Render activo
+  // Mantener Render activo
   startKeepAlive(config);
 
-  // Conectar bot a Discord
+  // Conectar a Discord
   await client.login(config.token);
 
   console.log(
@@ -97,7 +92,6 @@ async function start() {
   // ========================================
   startTikTokLiveMonitor(client);
 }
-
 
 // ==========================================
 // ARRANCAR YOJHAN CHEATS
