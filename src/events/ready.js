@@ -1,13 +1,30 @@
 const { Events, ActivityType } = require("discord.js");
+const { cacheAllInvites } = require("../services/inviteTracker");
 
 module.exports = {
   name: Events.ClientReady,
   once: true,
-  execute(client) {
-    console.log(`[ready] YOJHAN_CHEATS conectado como ${client.user.tag}`);
+
+  async execute(client) {
+    console.log(
+      `[ready] SHADOW CHEATS conectado como ${client.user.tag}`
+    );
+
     client.user.setPresence({
-      activities: [{ name: "YOJHAN_CHEATS | tickets", type: ActivityType.Watching }],
+      activities: [
+        {
+          name: "SHADOW CHEATS | tickets",
+          type: ActivityType.Watching
+        }
+      ],
       status: "online"
     });
+
+    // Guardar el estado actual de las invitaciones
+    await cacheAllInvites(client);
+
+    console.log(
+      "[invites] Sistema de invitaciones preparado."
+    );
   }
 };
