@@ -2,7 +2,7 @@
   "name": "yojhan-cheats-discord-bot",
   "version": "2.1.1",
   "private": true,
-  "description": "Bot de Discord YOJHAN_CHEATS: tickets, keys free, embeds, anuncios y moderacion.",
+  "description": "Bot de Discord YOJHAN CHEATS: tickets, keys free, embeds, anuncios, moderacion y bienvenidas.",
   "main": "index.js",
   "scripts": {
     "start": "node deploy-commands.js && node index.js",
@@ -13,6 +13,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.80",
     "discord.js": "^14.19.3",
     "dotenv": "^16.5.0"
   }
