@@ -1,5 +1,6 @@
 const {
   Client,
+  Events,
   GatewayIntentBits,
   Partials
 } = require("discord.js");
@@ -13,6 +14,29 @@ const { loadCommands } = require("./utils/loadCommands");
 // ==========================================
 
 const httpServer = startKeepAlive(config);
+const DISCORD_LOGIN_TIMEOUT_MS =
+  Number(process.env.DISCORD_LOGIN_TIMEOUT_MS) ||
+  45 * 1000;
+
+function logEnvironmentPresence() {
+  console.log(`[ENV] DISCORD_TOKEN presente: ${config.token ? "sí" : "no"}`);
+  console.log(`[ENV] CLIENT_ID presente: ${config.clientId ? "sí" : "no"}`);
+  console.log(`[ENV] GUILD_ID presente: ${config.guildId ? "sí" : "no"}`);
+}
+
+function withTimeout(promise, ms, label) {
+  let timeoutId;
+
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} no respondió después de ${ms}ms`)),
+      ms
+    );
+  });
+
+  return Promise.race([promise, timeout])
+    .finally(() => clearTimeout(timeoutId));
+}
 
 function createClient() {
   return new Client({
@@ -55,6 +79,48 @@ function loadEvents(client) {
   }
 }
 
+function registerDiscordDiagnostics(client) {
+  client.on("error", (error) => {
+    console.error("[DISCORD] Client error:", error);
+  });
+
+  client.on("shardError", (error, shardId) => {
+    console.error(`[DISCORD] Shard ${shardId} error:`, error);
+  });
+
+  client.on("shardDisconnect", (event, shardId) => {
+    console.warn(
+      `[DISCORD] Shard ${shardId} desconectado: code=${event?.code} reason=${event?.reason || "sin razón"}`
+    );
+  });
+
+  client.on("shardReconnecting", (shardId) => {
+    console.warn(`[DISCORD] Shard ${shardId} reconectando...`);
+  });
+
+  client.on("shardReady", (shardId) => {
+    console.log(`[DISCORD] Shard ${shardId} listo.`);
+  });
+}
+
+function startSecondaryServicesAfterReady(client) {
+  client.once(Events.ClientReady, () => {
+    setImmediate(() => {
+      try {
+        console.log("[START] Iniciando servicios secundarios después de ready...");
+
+        const {
+          startTikTokLiveMonitor
+        } = require("./services/tiktokLiveService");
+
+        startTikTokLiveMonitor(client);
+      } catch (error) {
+        console.error("[START] ⚠️ No se pudo iniciar TikTok:", error);
+      }
+    });
+  });
+}
+
 // ==========================================
 // INICIAR BOT
 // ==========================================
@@ -65,35 +131,33 @@ async function start() {
   console.log("========================================");
   console.log("[START] HTTP listo para Render antes de Discord.");
 
+  logEnvironmentPresence();
   assertRuntimeConfig();
 
   const client = createClient();
+  registerDiscordDiagnostics(client);
 
   loadCommands(client);
   console.log(`[START] Comandos cargados: ${client.commands.size}`);
 
   loadEvents(client);
   console.log("[START] Eventos cargados: ready, interactionCreate, guildMemberAdd");
+  startSecondaryServicesAfterReady(client);
 
   // Conectar a Discord
-  await client.login(config.token);
+  console.log("[DISCORD] Iniciando login...");
+
+  await withTimeout(
+    client.login(config.token),
+    DISCORD_LOGIN_TIMEOUT_MS,
+    "[DISCORD] client.login"
+  );
+
+  console.log("[DISCORD] Login completado; esperando evento ready si aún no llegó.");
 
   console.log(
     `[START] Discord conectado como ${client.user?.tag}`
   );
-
-  // ========================================
-  // INICIAR MONITOR DE TIKTOK LIVE
-  // ========================================
-  try {
-    const {
-      startTikTokLiveMonitor
-    } = require("./services/tiktokLiveService");
-
-    startTikTokLiveMonitor(client);
-  } catch (error) {
-    console.error("[START] ⚠️ No se pudo iniciar TikTok:", error);
-  }
 
   console.log("========================================");
   console.log("✅ YOJHAN CHEATS INICIADO");
@@ -106,14 +170,23 @@ async function start() {
 start().catch((error) => {
 
   console.error(
-    "[Start] Error iniciando YOJHAN CHEATS:",
+    "[START] Error iniciando YOJHAN CHEATS:",
     error
   );
 
   if (httpServer) {
-    console.error("[Start] HTTP sigue activo para /health; revisa variables de Discord.");
+    console.error("[START] HTTP sigue activo para /health; Discord no quedó conectado.");
   }
 
-  process.exit(1);
+  process.exitCode = 1;
 
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[PROCESS] Promesa rechazada sin manejar:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[PROCESS] Excepción no capturada:", error);
+  process.exitCode = 1;
 });
