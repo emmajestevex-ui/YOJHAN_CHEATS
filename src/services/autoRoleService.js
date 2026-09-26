@@ -219,6 +219,10 @@ async function handleGender(member, selectedRole) {
 
 async function handleButton(interaction) {
 
+  await interaction.deferReply({
+    ephemeral: true
+  });
+
   // Obtener miembro actualizado
   const member = await interaction.guild.members.fetch(
     interaction.user.id
@@ -307,18 +311,21 @@ async function handleButton(interaction) {
   }
 
 
-  if (!result) return;
+  if (!result) {
+    await interaction.editReply({
+      content: "Ese botón de autorol ya no está disponible."
+    });
+    return;
+  }
 
 
   // ========================================
   // RESPUESTA PRIVADA
   // ========================================
 
-  await interaction.reply({
+  await interaction.editReply({
 
     content: result.message,
-
-    ephemeral: true
 
   });
 

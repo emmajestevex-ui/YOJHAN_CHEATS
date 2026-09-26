@@ -5,67 +5,53 @@ const {
 } = require("discord.js");
 
 const { assertRuntimeConfig, config } = require("./config");
-const { deployCommands } = require("./deploy-commands");
 const { startKeepAlive } = require("./keepAlive");
 const { loadCommands } = require("./utils/loadCommands");
 
 // ==========================================
-// TIKTOK LIVE
-// ==========================================
-const {
-  startTikTokLiveMonitor
-} = require("./services/tiktokLiveService");
-
-// ==========================================
 // COMPROBAR CONFIGURACIÓN
 // ==========================================
-assertRuntimeConfig();
 
-// ==========================================
-// CREAR CLIENTE DE DISCORD
-// ==========================================
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers
-  ],
+const httpServer = startKeepAlive(config);
 
-  partials: [
-    Partials.Channel
-  ]
-});
+function createClient() {
+  return new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMembers
+    ],
 
-// ==========================================
-// CARGAR COMANDOS
-// ==========================================
-loadCommands(client);
+    partials: [
+      Partials.Channel
+    ]
+  });
+}
 
-// ==========================================
-// EVENTOS QUE UTILIZA EL BOT
-// ==========================================
-for (const event of [
-  "ready",
-  "interactionCreate",
-  "guildMemberAdd"
-]) {
+function loadEvents(client) {
+  for (const event of [
+    "ready",
+    "interactionCreate",
+    "guildMemberAdd"
+  ]) {
 
-  const handler = require(`./events/${event}`);
+    const handler = require(`./events/${event}`);
 
-  if (handler.once) {
+    if (handler.once) {
 
-    client.once(
-      handler.name,
-      (...args) => handler.execute(...args)
-    );
+      client.once(
+        handler.name,
+        (...args) => handler.execute(...args)
+      );
 
-  } else {
+    } else {
 
-    client.on(
-      handler.name,
-      (...args) => handler.execute(...args)
-    );
+      client.on(
+        handler.name,
+        (...args) => handler.execute(...args)
+      );
 
+    }
   }
 }
 
@@ -74,11 +60,20 @@ for (const event of [
 // ==========================================
 async function start() {
 
-  // Registrar comandos
-  await deployCommands();
+  console.log("========================================");
+  console.log("🚀 INICIANDO YOJHAN CHEATS");
+  console.log("========================================");
+  console.log("[START] HTTP listo para Render antes de Discord.");
 
-  // Mantener Render activo
-  startKeepAlive(config);
+  assertRuntimeConfig();
+
+  const client = createClient();
+
+  loadCommands(client);
+  console.log(`[START] Comandos cargados: ${client.commands.size}`);
+
+  loadEvents(client);
+  console.log("[START] Eventos cargados: ready, interactionCreate, guildMemberAdd");
 
   // Conectar a Discord
   await client.login(config.token);
@@ -90,7 +85,19 @@ async function start() {
   // ========================================
   // INICIAR MONITOR DE TIKTOK LIVE
   // ========================================
-  startTikTokLiveMonitor(client);
+  try {
+    const {
+      startTikTokLiveMonitor
+    } = require("./services/tiktokLiveService");
+
+    startTikTokLiveMonitor(client);
+  } catch (error) {
+    console.error("[START] ⚠️ No se pudo iniciar TikTok:", error);
+  }
+
+  console.log("========================================");
+  console.log("✅ YOJHAN CHEATS INICIADO");
+  console.log("========================================");
 }
 
 // ==========================================
@@ -102,6 +109,10 @@ start().catch((error) => {
     "[Start] Error iniciando YOJHAN CHEATS:",
     error
   );
+
+  if (httpServer) {
+    console.error("[Start] HTTP sigue activo para /health; revisa variables de Discord.");
+  }
 
   process.exit(1);
 

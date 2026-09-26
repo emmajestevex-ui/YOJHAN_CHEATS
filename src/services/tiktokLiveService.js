@@ -20,12 +20,32 @@ const LIVE_CHANNEL_ID = "1549623203876442177";
 // Revisar cada 60 segundos
 const CHECK_INTERVAL = 60 * 1000;
 
+// Ninguna comprobación externa debe bloquear el bot.
+const USER_CHECK_TIMEOUT = 45 * 1000;
+const CONNECT_TIMEOUT = 25 * 1000;
+const CHANNEL_SEND_TIMEOUT = 15 * 1000;
+
 // Guardar estado anterior de cada cuenta
 const liveStates = new Map();
 
 // Evitar comprobaciones simultáneas
 let checking = false;
 
+function withTimeout(promise, ms, label) {
+
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} tardó más de ${ms}ms`)),
+      ms
+    );
+  });
+
+  return Promise.race([promise, timeoutPromise])
+    .finally(() => clearTimeout(timeoutId));
+
+}
 
 // ==========================================
 // COMPROBAR UNA CUENTA
@@ -73,7 +93,11 @@ async function checkUser(client, username) {
 
     try {
 
-      const state = await connection.connect();
+      const state = await withTimeout(
+        connection.connect(),
+        CONNECT_TIMEOUT,
+        `[TikTok] connect @${username}`
+      );
 
       isLive = true;
 
@@ -239,7 +263,7 @@ async function checkUser(client, username) {
 
       try {
 
-        await channel.send({
+        await withTimeout(channel.send({
 
           content:
             `@everyone 🔴 **@${username} ESTÁ EN LIVE!**`,
@@ -258,7 +282,7 @@ async function checkUser(client, username) {
             ]
           }
 
-        });
+        }), CHANNEL_SEND_TIMEOUT, `[TikTok] enviar aviso @${username}`);
 
 
         console.log(
@@ -360,9 +384,13 @@ async function checkTikTokLives(client) {
 
     for (const username of TIKTOK_USERS) {
 
-      await checkUser(
-        client,
-        username
+      await withTimeout(
+        checkUser(
+          client,
+          username
+        ),
+        USER_CHECK_TIMEOUT,
+        `[TikTok] comprobación @${username}`
       );
 
     }
@@ -378,6 +406,10 @@ async function checkTikTokLives(client) {
   } finally {
 
     checking = false;
+
+    console.log(
+      "[TikTok] Comprobación finalizada."
+    );
 
   }
 

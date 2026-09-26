@@ -3,11 +3,11 @@
   "version": "2.1.1",
   "private": true,
   "description": "Bot de Discord YOJHAN CHEATS: tickets, keys free, embeds, anuncios, moderacion y bienvenidas.",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node deploy-commands.js && node index.js",
-    "deploy": "node deploy-commands.js",
-    "check": "node --check index.js && node --check commands.js && node --check deploy-commands.js"
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "check": "node scripts/check-syntax.js"
   },
   "engines": {
     "node": ">=20"

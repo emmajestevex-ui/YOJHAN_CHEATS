@@ -18,6 +18,10 @@ module.exports = {
 
   async execute(interaction) {
 
+    await interaction.deferReply({
+      ephemeral: true
+    });
+
     const embed = new EmbedBuilder()
       .setColor(0x00c7b7)
       .setTitle("🎭 PERSONALIZA TU PERFIL")
@@ -124,10 +128,9 @@ module.exports = {
     });
 
 
-    await interaction.reply({
+    await interaction.editReply({
       content:
-        "✅ Panel de auto roles creado correctamente.",
-      ephemeral: true
+        "✅ Panel de auto roles creado correctamente."
     });
 
   }

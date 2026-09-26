@@ -33,7 +33,9 @@ async function sendInteractionError(interaction) {
 
     await interaction
       .followUp(payload)
-      .catch(() => {});
+      .catch((error) => {
+        console.error("[INTERACTION] No se pudo enviar followUp de error:", error.message);
+      });
 
     return;
 
@@ -42,8 +44,35 @@ async function sendInteractionError(interaction) {
 
   await interaction
     .reply(payload)
-    .catch(() => {});
+    .catch((error) => {
+      console.error("[INTERACTION] No se pudo responder error:", error.message);
+    });
 
+}
+
+async function replyUnhandled(interaction, label) {
+  const id =
+    interaction.customId ||
+    interaction.commandName ||
+    "sin-id";
+
+  console.warn(`[${label}] Interacción sin manejador: ${id}`);
+
+  const payload = {
+    content:
+      "Esta interacción ya no está disponible. Vuelve a publicar el panel o usa el comando de nuevo.",
+    ephemeral: true
+  };
+
+  if (
+    interaction.deferred ||
+    interaction.replied
+  ) {
+    await interaction.followUp(payload).catch(() => {});
+    return;
+  }
+
+  await interaction.reply(payload).catch(() => {});
 }
 
 
@@ -67,13 +96,20 @@ module.exports = {
 
       if (interaction.isChatInputCommand()) {
 
+        console.log(
+          `[COMMAND] /${interaction.commandName} por ${interaction.user.tag} (${interaction.user.id})`
+        );
+
         const command =
           interaction.client.commands.get(
             interaction.commandName
           );
 
 
-        if (!command) return;
+        if (!command) {
+          await replyUnhandled(interaction, "COMMAND");
+          return;
+        }
 
 
         await command.execute(interaction);
@@ -89,6 +125,10 @@ module.exports = {
 
       if (interaction.isButton()) {
 
+        console.log(
+          `[BUTTON] ${interaction.customId} por ${interaction.user.tag} (${interaction.user.id})`
+        );
+
 
         // ================================
         // AUTO ROLES
@@ -99,6 +139,8 @@ module.exports = {
             interaction
           )
         ) {
+
+          console.log(`[AUTOROLE] ${interaction.customId}`);
 
           await autoRoleService.handleButton(
             interaction
@@ -119,6 +161,8 @@ module.exports = {
           )
         ) {
 
+          console.log(`[BUTTON] Sistema embeds: ${interaction.customId}`);
+
           await adminEmbedService.handleButton(
             interaction
           );
@@ -138,6 +182,8 @@ module.exports = {
           )
         ) {
 
+          console.log(`[TICKET] ${interaction.customId}`);
+
           await ticketService.handleButton(
             interaction
           );
@@ -147,6 +193,7 @@ module.exports = {
         }
 
 
+        await replyUnhandled(interaction, "BUTTON");
         return;
 
       }
@@ -157,6 +204,10 @@ module.exports = {
       // ====================================
 
       if (interaction.isModalSubmit()) {
+
+        console.log(
+          `[MODAL] ${interaction.customId} por ${interaction.user.tag} (${interaction.user.id})`
+        );
 
         if (
           adminEmbedService.canHandleModal(
@@ -172,13 +223,15 @@ module.exports = {
 
         }
 
+        await replyUnhandled(interaction, "MODAL");
+
       }
 
 
     } catch (error) {
 
       console.error(
-        "[interaction]",
+        "[INTERACTION]",
         error
       );
 

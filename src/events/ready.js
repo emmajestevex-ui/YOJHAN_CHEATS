@@ -7,13 +7,13 @@ module.exports = {
 
   async execute(client) {
     console.log(
-      `[ready] SHADOW CHEATS conectado como ${client.user.tag}`
+      `[ready] YOJHAN CHEATS conectado como ${client.user.tag}`
     );
 
     client.user.setPresence({
       activities: [
         {
-          name: "SHADOW CHEATS | tickets",
+          name: "YOJHAN CHEATS | tickets",
           type: ActivityType.Watching
         }
       ],
@@ -21,10 +21,17 @@ module.exports = {
     });
 
     // Guardar el estado actual de las invitaciones
-    await cacheAllInvites(client);
+    try {
+      await cacheAllInvites(client);
 
-    console.log(
-      "[invites] Sistema de invitaciones preparado."
-    );
+      console.log(
+        "[invites] Sistema de invitaciones preparado."
+      );
+    } catch (error) {
+      console.error(
+        "[invites] No se pudo preparar el cache de invitaciones:",
+        error
+      );
+    }
   }
 };
