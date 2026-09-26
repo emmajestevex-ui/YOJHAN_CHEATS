@@ -10,10 +10,6 @@ const {
   detectUsedInvite
 } = require("../services/inviteTracker");
 
-const {
-  processInvite
-} = require("../services/inviteService");
-
 const WELCOME_CHANNEL_ID = "1549623202408308787";
 const INVITES_CHANNEL_ID = "1549623202408308788";
 
@@ -37,6 +33,10 @@ module.exports = {
           `[invites] No se pudo identificar la invitación usada por ${member.user.tag}`
         );
       } else {
+        const {
+          processInvite
+        } = require("../services/inviteService");
+
         const result = await processInvite(
           member,
           usedInvite
