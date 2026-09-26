@@ -17,9 +17,6 @@ const httpServer = startKeepAlive(config);
 const DISCORD_LOGIN_TIMEOUT_MS =
   Number(process.env.DISCORD_LOGIN_TIMEOUT_MS) ||
   45 * 1000;
-const DISCORD_API_TIMEOUT_MS =
-  Number(process.env.DISCORD_API_TIMEOUT_MS) ||
-  15 * 1000;
 
 function logEnvironmentPresence() {
   console.log(`[ENV] DISCORD_TOKEN presente: ${config.token ? "sí" : "no"}`);
@@ -125,96 +122,6 @@ function registerDiscordDiagnostics(client) {
   });
 }
 
-async function fetchDiscordJson(path, token, label) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    DISCORD_API_TIMEOUT_MS
-  );
-
-  try {
-    const response = await fetch(
-      `https://discord.com/api/v10${path}`,
-      {
-        headers: {
-          Authorization: `Bot ${token}`,
-          "User-Agent": "YOJHAN_CHEATS diagnostics"
-        },
-        signal: controller.signal
-      }
-    );
-
-    const text = await response.text();
-    let data = null;
-
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = { raw: text.slice(0, 200) };
-    }
-
-    return {
-      ok: response.ok,
-      status: response.status,
-      data,
-      label
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function runDiscordPreflight() {
-  console.log("[DISCORD:REST] Verificando token con /users/@me...");
-
-  try {
-    const me = await fetchDiscordJson(
-      "/users/@me",
-      config.token,
-      "users/@me"
-    );
-
-    if (!me.ok) {
-      console.error(
-        `[DISCORD:REST] Token rechazado por Discord. status=${me.status} code=${me.data?.code || "n/a"} message=${me.data?.message || "n/a"}`
-      );
-      return false;
-    }
-
-    console.log(
-      `[DISCORD:REST] Token aceptado. Bot ID: ${me.data?.id || "desconocido"}`
-    );
-  } catch (error) {
-    console.error("[DISCORD:REST] Falló /users/@me:", error);
-    return false;
-  }
-
-  console.log("[DISCORD:GATEWAY] Verificando /gateway/bot...");
-
-  try {
-    const gateway = await fetchDiscordJson(
-      "/gateway/bot",
-      config.token,
-      "gateway/bot"
-    );
-
-    if (!gateway.ok) {
-      console.error(
-        `[DISCORD:GATEWAY] Discord rechazó /gateway/bot. status=${gateway.status} code=${gateway.data?.code || "n/a"} message=${gateway.data?.message || "n/a"}`
-      );
-      return false;
-    }
-
-    console.log(
-      `[DISCORD:GATEWAY] URL recibida: ${gateway.data?.url || "sin-url"} | shards sugeridos: ${gateway.data?.shards || "n/a"}`
-    );
-    return true;
-  } catch (error) {
-    console.error("[DISCORD:GATEWAY] Falló /gateway/bot:", error);
-    return false;
-  }
-}
-
 function startSecondaryServicesAfterReady(client) {
   client.once(Events.ClientReady, () => {
     setImmediate(() => {
@@ -255,8 +162,6 @@ async function start() {
   loadEvents(client);
   console.log("[START] Eventos cargados: ready, interactionCreate, guildMemberAdd");
   startSecondaryServicesAfterReady(client);
-
-  await runDiscordPreflight();
 
   // Conectar a Discord
   console.log("[DISCORD] Iniciando login...");
